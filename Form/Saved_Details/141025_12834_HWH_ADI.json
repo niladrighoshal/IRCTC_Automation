@@ -1,0 +1,37 @@
+{
+  "login": {
+    "username": "Niladrighoshal",
+    "password": "Niladrigh@2"
+  },
+  "train": {
+    "from_station": "HWH",
+    "to_station": "ADI",
+    "date": "14102025",
+    "train_no": "12834",
+    "class": "AC 3 Tier (3A)",
+    "quota": "GENERAL"
+  },
+  "passengers": [
+    {
+      "name": "Niladri Ghoshal",
+      "age": 24,
+      "sex": "Male",
+      "nationality": "Indian",
+      "berth": "Upper"
+    },
+    {
+      "name": "Sachin Kumar",
+      "age": 24,
+      "sex": "Male",
+      "nationality": "Indian",
+      "berth": "Lower"
+    }
+  ],
+  "preferences": {
+    "auto_upgrade": true,
+    "confirm_only": true,
+    "payment_method": "Pay through BHIM UPI",
+    "upi_id": "niladrighoshal.20-9@okicici"
+  },
+  "saved_at": "2025-08-23T22:04:48"
+}
