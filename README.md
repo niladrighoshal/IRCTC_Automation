@@ -1,111 +1,55 @@
-# IRCTC Tatkal Booking Bot
+# IRCTC Tatkal Booking Bot (v3 - Intelligent Automaton)
 
-This is a high-performance, multi-threaded application designed to automate the process of booking IRCTC Tatkal tickets. It uses a modern Streamlit-based UI for configuration and launching, and leverages Selenium for browser automation.
+This is a high-performance, multi-threaded application designed to automate the process of booking IRCTC Tatkal tickets. This intelligent version features a sophisticated UI, resilient state-machine architecture, and advanced multi-stage timing for a professional-grade booking experience.
 
 ---
 
 ## 🌟 Key Features
 
-- **Multi-Browser & Multi-Account:** Run multiple browser instances simultaneously, each with a different IRCTC account, to maximize your booking chances.
-- **Precision Timing:** Synchronizes with IRCTC's official servers to start the booking process at the exact moment the Tatkal window opens.
-- **Streamlit UI:** A simple and effective web-based UI to configure your journey, manage settings, and launch the bots.
-- **Fully Automated Captcha Solving:** Uses the `easyocr` library to automatically read and solve captchas for a "hands-free" booking experience.
-- **GPU Acceleration:** Includes a toggle in the UI to enable GPU-powered OCR for significantly faster captcha solving on compatible hardware.
-- **Extensible & Modular:** The code is architected with a clean separation of concerns, making it easy to maintain and extend.
-- **Packaged for Distribution:** Includes a `build.spec` file to create a single-file executable using PyInstaller.
+- **Advanced UI Form:** A rich user interface for creating, saving, and loading detailed booking configurations.
+- **State-Machine Core:** The bot is no longer a simple script. It's a resilient automaton that understands its current state on the website and can recover from unexpected glitches like being logged out.
+- **Advanced Multi-Stage Timing:** For Tatkal bookings, the bot follows a precise sequence: opening the browser 3 minutes before, logging in 1 minute before, and initiating the search at the exact moment the window opens.
+- **Intelligent Popup Handling:** A high-speed observer constantly watches for and instantly closes known popups (like Aadhaar or Disha banners) without interrupting the main workflow.
+- **Full Automation:** End-to-end automation, including OCR-based captcha solving.
+- **Live Dashboard:** A real-time dashboard in the UI sidebar shows the live status of each bot and a synchronized IRCTC server clock.
+- **Complete Session & Credential Management:** Save/load booking sessions and user accounts.
+- **Stealthy & Robust:** Uses `undetected-chromedriver` to avoid bot detection and has long timeouts to handle slow network conditions gracefully.
 
 ---
 
-## ⚙️ How It Works: The Application Flow
+## ⚙️ How It Works: The Intelligent Flow
 
-The application operates in a clear, sequential flow, orchestrated by the Streamlit UI and the core bot logic.
-
-1.  **Launch:** The user starts the application by running `python master.py`. This script launches the Streamlit web server and opens the UI in a browser.
-2.  **Configuration:** The UI displays the current booking settings loaded from `src/config.py`. It also performs validation checks, such as ensuring you have enough accounts for the number of browsers and that you haven't exceeded the 4-passenger limit for Tatkal.
-3.  **Bot Initialization:** When the "Launch Booking Bots" button is clicked, the UI creates and starts a separate Python thread for each browser instance (`BROWSER_COUNT`). Each thread is assigned a unique IRCTC account and an instance ID.
-4.  **Browser Creation:** Each bot thread calls the `webdriver_factory` to create its own independent, sandboxed Selenium WebDriver instance.
-5.  **Wait for Tatkal Time:** Each bot then calls the `time_utils` module to synchronize with IRCTC's server time. The bot will pause its execution until the precise, calculated moment the Tatkal window opens.
-6.  **Execution Sequence:** Once the time is reached, each bot begins executing the fully automated booking workflow defined in `src/core/bot.py`:
-    - **Login:** Navigates to the site, fills credentials, and **automatically solves the captcha using OCR**.
-    - **Fill Journey:** Fills the "From", "To", and "Date" details.
-    - **Select Train:** Selects the Tatkal quota, finds the correct train and class, and clicks "Book Now".
-    - **Fill Passengers:** Fills out the details for all configured passengers.
-    - **Final Review:** **Automatically solves the second captcha using OCR**.
-    - **Payment:** Selects the UPI payment method and clicks the final "Pay & Book" button.
-7.  **Completion:** The bot's automated job is complete. It waits on the final page, and if it detects a PNR confirmation, it saves a screenshot. You just need to complete the payment on your UPI app.
+1.  **Configuration:** The user configures a booking using the advanced UI, then configures runtime settings (Tatkal mode, browser count, etc.) in the sidebar.
+2.  **Launch:** When "Launch" is clicked, the UI starts a new thread for each bot.
+3.  **Timed Sequence (for Tatkal):**
+    -   **T-3 Minutes:** The bot calculates the synchronized time and waits. At T-3m, it opens a browser window and navigates to the IRCTC homepage.
+    -   **T-1 Minute:** The bot waits again. At T-1m, it performs the login (solving the captcha automatically) and fills in all the journey details on the main page.
+    -   The bot now waits, poised for the exact Tatkal opening time.
+4.  **State-Machine Execution:**
+    -   At the moment the Tatkal window opens, the bot clicks "Find Trains".
+    -   From this point forward, it enters a **resilient state-machine loop**.
+    -   In the loop, it constantly checks: "What page am I on?" (`_get_current_state`) and "Are there any popups?" (`_handle_popups`).
+    -   Based on the state, it executes the correct action (e.g., `_select_train_and_class`, `_fill_passenger_details`).
+    -   **If it's unexpectedly logged out, the state check will detect this, and the bot will automatically try to log back in and continue.**
+5.  **Completion:** The process finishes after payment is initiated. The live dashboard will show the final status.
 
 ---
 
 ## 📂 File Architecture
 
-The project is organized into a modular structure for clarity and maintainability.
-
--   `master.py`: The main entry point script. You run this to start the application. It simply launches the Streamlit UI.
--   `main.py`: The entry point for the Streamlit application itself.
--   `requirements.txt`: A list of all Python dependencies required for the project.
--   `build.spec`: The configuration file for PyInstaller to build a distributable executable.
--   `README.md`: This file.
-
-### `src/` - The Source Code Directory
-
--   **`src/config.py`**: **(User-configurable)** This is the most important file for the user. It contains all the settings for the bot, including account credentials, journey details, passenger information, and technical settings like `BROWSER_COUNT`.
-
--   **`src/ui/app.py`**: This file contains all the code for the Streamlit user interface.
-    -   `run()`: The main function that sets up the Streamlit page, displays the configuration, performs validation checks, and contains the "Launch" button logic that starts the bot threads.
-
--   **`src/core/bot.py`**: The heart of the application. It contains the `IRCTCBot` class which manages a single browser instance and performs the booking.
-    -   `IRCTCBot.run()`: The main method that orchestrates the sequence of booking steps.
-    -   `IRCTCBot._perform_login()`: Handles the login sequence.
-    -   `IRCTCBot._fill_journey_details()`: Fills the main search form.
-    -   `IRCTCBot._select_train_and_class()`: Handles the train list page.
-    -   `IRCTCBot._fill_passenger_details()`: Handles the passenger details form.
-    -   `IRCTCBot._handle_final_review()`: Handles the final review page and the second CAPTCHA.
-    -   `IRCTCBot._perform_payment()`: Handles the final payment page.
-
--   **`src/core/ocr_solver.py`**: This module contains the complete logic for solving captchas. It uses the `easyocr` library, supports GPU acceleration, and includes image preprocessing functions to improve accuracy.
-
--   **`src/core/selectors.py`**: **(User-configurable)** This file centralizes all the CSS and XPath selectors used to find elements on the IRCTC website. If the website's layout changes in the future, you should only need to update the selectors in this file.
-
--   **`src/core/webdriver_factory.py`**: A utility module responsible for creating and configuring Selenium WebDriver instances. It reads settings like `HEADLESS` and `USE_GPU` from the config file.
-
--   **`src/utils/logger.py`**: A utility to set up instance-specific loggers. This ensures that the console output from each bot thread is clearly tagged (e.g., `[Bot 1]`, `[Bot 2]`), which is essential for debugging.
-
--   **`src/utils/time_utils.py`**: This utility handles the precision timing.
-    -   `get_irctc_server_time()`: Fetches the current time directly from IRCTC's API.
-    -   `wait_until_tatkal_time()`: Calculates the difference between server time and local time and makes the bot wait until the perfectly synchronized moment to start booking.
+The project uses a highly modular structure. Key files include:
+-   `master.py`: The main script to run the application.
+-   `src/ui/app.py`: The complete Streamlit UI, including the form, sidebar, and live dashboard client.
+-   `src/core/bot.py`: The heart of the application. Contains the state-machine logic, the timed sequence, and all booking action methods.
+-   `src/utils/status_server.py`: The background server that powers the live dashboard.
+-   `credentials.json` & `saved_details/`: Directories for storing user data.
 
 ---
 
 ## 🚀 Setup and Usage
 
-1.  **Prerequisites:**
-    -   Python 3.8+
-    -   Google Chrome browser installed in the default location.
-
-2.  **Installation:**
-    -   Clone the repository.
-    -   Install Python dependencies: `pip install -r requirements.txt`
-    -   **Note:** You do **not** need to manually download `chromedriver`. The `undetected-chromedriver` library handles this automatically.
-
-3.  **Configuration:**
-    -   Open `src/config.py` and carefully fill in all your details (accounts, journey, passengers, etc.).
-
-4.  **Run the Bot:**
-    -   Open a terminal in the project's root directory.
-    -   Run the command: `python master.py`
-    -   A browser tab with the Streamlit UI will open.
-
-5.  **Launch and Operate:**
-    -   In the Streamlit UI sidebar, you can optionally **toggle GPU acceleration for OCR**.
-    -   Click the **"🚀 Launch Booking Bots"** button.
-    -   The bot will open new Chrome windows and proceed with the booking **fully automatically**. There is no need for any further manual intervention.
-
----
-
-## 📦 Building the Executable
-
-To create a single-file executable for easier distribution:
-
-1.  Install PyInstaller: `pip install pyinstaller`
-2.  Run the build command from the root directory: `pyinstaller build.spec`
-3.  The final executable will be located in the `dist/` directory.
+1.  **Prerequisites:** Python 3.8+, Google Chrome.
+2.  **Installation:** `pip install -r requirements.txt`.
+3.  **Run:** `python master.py`.
+4.  **First-Time Use:** Configure your accounts in the sidebar and click "Save Credentials".
+5.  **Operation:** Fill out the booking form (or load a saved session), configure the sidebar toggles, and click "🚀 Launch Booking Bots". The process is fully automated.

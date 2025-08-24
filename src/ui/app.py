@@ -1,119 +1,274 @@
 import streamlit as st
-import src.config as config
-from src.core.bot import IRCTCBot
-import threading
 import json
+import os
+from datetime import date, datetime, timedelta
+import re
+import threading
+import time
+import requests
 
-def run_bot_thread(account, booking_details, instance_id):
-    """Function to be executed by each bot thread."""
-    bot = IRCTCBot(account, booking_details, instance_id)
-    bot.run()
+# Import project modules
+import src.config as config
+from src.utils.status_server import start_server_in_thread
+from src.utils.time_utils import get_irctc_server_time
+from src.core.bot_runner import run_bot_thread
+from src.utils.train_info import init_persistent_driver, fetch_train_name
 
-def display_config():
-    """Displays the current booking configuration in the UI."""
-    st.subheader("Journey & Passenger Details")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("From", config.STATION_FROM)
-    col2.metric("To", config.STATION_TO)
-    col3.metric("Date", config.JOURNEY_DATE)
+# --- Initialize Session State on first run ---
+def init_session_state():
+    if "server_started" not in st.session_state:
+        st.session_state.server_started = True
+        start_server_in_thread()
 
-    st.text(f"Train: {config.TRAIN_NUMBER}, Class: {config.TRAVEL_CLASS}")
+    if "info_driver" not in st.session_state:
+        st.session_state.info_driver = init_persistent_driver()
 
-    with st.expander("See Passenger List"):
-        st.json(config.PASSENGERS)
+    if "passengers" not in st.session_state:
+        st.session_state.passengers = [{"name":"", "age": None, "sex": "", "berth":""}]
 
-    st.subheader("Technical & Account Settings")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Browser Count", config.BROWSER_COUNT)
-    col2.metric("Headless Mode", str(config.HEADLESS))
-    col3.metric("Payment Method", config.PAYMENT_METHOD)
+    if "credentials" not in st.session_state:
+        CRED_FILE = "credentials.json"
+        if os.path.exists(CRED_FILE):
+            with open(CRED_FILE, "r") as f:
+                st.session_state.credentials = json.load(f)
+        else:
+            st.session_state.credentials = []
 
-    with st.expander("See Accounts (Usernames only)"):
-        st.json([{"username": acc["username"]} for acc in config.ACCOUNTS])
-
-
-def run():
-    """
-    Main function for the Streamlit UI.
-    It displays the configuration and provides a button to launch the bots.
-    """
+def run_app():
     st.set_page_config(layout="wide", page_title="IRCTC Tatkal Bot")
-    st.title("🤖 IRCTC Tatkal Booking Bot")
+    init_session_state()
+
+    # ---------- Styling ----------
+    st.markdown("""
+    <style>
+    .stApp { background: linear-gradient(to right, #e0eafc, #cfdef3); }
+    .stApp header { background-color: transparent; }
+    .stButton>button { background: linear-gradient(90deg, #1e3c72, #2a5298); color: white; font-weight: bold; border-radius: 8px; }
+    .branding { font-size: 28px; color: #1e3c72; font-weight: bold; }
+    input[type="text"] { text-transform: uppercase; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ---------- Branding ----------
+    st.markdown("<div class='branding'>IRCTC Tatkal Booking Form</div>", unsafe_allow_html=True)
     st.markdown("---")
 
-    st.sidebar.header("Master Controls")
+    # ---------- Sidebar ---
+    st.sidebar.title("Controls")
 
-    # --- OCR GPU Toggle ---
-    # This toggle directly modifies the config variable.
-    # The value it holds when "Launch" is clicked will be used by the bots.
-    config.OCR_USE_GPU = st.sidebar.toggle(
-        "Enable GPU for OCR",
-        value=config.OCR_USE_GPU,
-        help="Use GPU for faster captcha solving. Requires a compatible NVIDIA or Apple Silicon GPU."
-    )
+    config.TIMED_BOOKING = st.sidebar.toggle("Timed (Tatkal) Booking", value=config.TIMED_BOOKING, help="Enable for Tatkal timing logic.")
+    if config.TIMED_BOOKING:
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            config.IS_AC = st.toggle("AC (10 AM)", value=config.IS_AC)
+        with col2:
+            config.IS_SL = st.toggle("SL (11 AM)", value=config.IS_SL)
 
     st.sidebar.markdown("---")
+    config.HEADLESS = st.sidebar.toggle("Run Headless", value=config.HEADLESS)
+    config.USE_GPU = st.sidebar.toggle("Enable GPU for OCR", value=config.USE_GPU)
 
-    # --- Configuration Validation ---
-    validation_passed = True
-    # Verify that there are enough accounts for the number of browsers specified.
-    if len(config.ACCOUNTS) < config.BROWSER_COUNT:
-        validation_passed = False
-        st.sidebar.error(
-            f"Config Error: BROWSER_COUNT ({config.BROWSER_COUNT}) is greater than "
-            f"the number of ACCOUNTS ({len(config.ACCOUNTS)})."
-        )
+    max_browsers = 25 if config.HEADLESS else 8
+    browser_count = st.sidebar.slider("Number of Browsers", 1, max_browsers, config.DEFAULT_BROWSER_COUNT)
 
-    # Verify the Tatkal passenger limit.
-    if len(config.PASSENGERS) > 4:
-        validation_passed = False
-        st.sidebar.error(
-            f"Config Error: A maximum of 4 passengers are allowed for Tatkal bookings. "
-            f"You have specified {len(config.PASSENGERS)}."
-        )
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("User Accounts")
 
-    # The button is disabled if validation fails.
-    if st.sidebar.button("🚀 Launch Booking Bots", disabled=not validation_passed):
-        st.sidebar.info(f"Launching {config.BROWSER_COUNT} bot(s)...")
+    # Ensure credentials list in session state is long enough
+    while len(st.session_state.credentials) < browser_count:
+        st.session_state.credentials.append({"username": "", "password": ""})
 
-        # Prepare booking details from config
-        booking_details = {
-            "from_station": config.STATION_FROM,
-            "to_station": config.STATION_TO,
-            "journey_date": config.JOURNEY_DATE,
-            "train_number": config.TRAIN_NUMBER,
-            "travel_class": config.TRAVEL_CLASS,
-            "passengers": config.PASSENGERS
+    # Display input fields for the number of browsers
+    for i in range(browser_count):
+        with st.sidebar.expander(f"Account {i+1}", expanded=i==0):
+            cred = st.session_state.credentials[i]
+            cred["username"] = st.text_input(f"Username {i+1}", value=cred.get("username", ""), key=f"user{i}")
+            cred["password"] = st.text_input(f"Password {i+1}", value=cred.get("password", ""), type="password", key=f"pass{i}")
+
+    if st.sidebar.button("Save Credentials"):
+        with open("credentials.json", "w") as f:
+            json.dump(st.session_state.credentials[:browser_count], f, indent=2)
+        st.sidebar.success("Credentials saved!")
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Saved Bookings")
+    saved_files = [f for f in os.listdir("saved_details") if f.endswith(".json")]
+
+    if not saved_files:
+        st.sidebar.write("No saved bookings found.")
+    else:
+        selected_file = st.sidebar.selectbox("Load a saved booking", [""] + saved_files)
+        if st.sidebar.button("Load Selected"):
+            if selected_file:
+                filepath = os.path.join("saved_details", selected_file)
+                with open(filepath, "r") as f:
+                    st.session_state.loaded_data = json.load(f)
+                st.info(f"Loaded data from `{selected_file}`.")
+
+    if "loaded_data" in st.session_state:
+        with st.expander("View Loaded Booking Data", expanded=True):
+            st.json(st.session_state.loaded_data)
+
+    st.sidebar.markdown("---")
+    # Launch button is now here
+    if st.sidebar.button("🚀 Launch Booking Bots", use_container_width=True):
+        try: requests.post("http://localhost:8000/clear", timeout=1)
+        except: pass
+
+        from_station = from_station_display.split('(')[-1][:-1]
+        to_station = to_station_display.split('(')[-1][:-1]
+        class_code_match = re.search(r'\((\w+)\)', train_class_val)
+        class_code = class_code_match.group(1) if class_code_match else "CLASS"
+        tatkal_hour = 11 if config.IS_SL else 10
+
+        booking_data = {
+            "train": {"from_station": from_station, "to_station": to_station, "date": travel_date.strftime("%d/%m/%Y"), "train_no": train_no_input, "class": class_code, "quota": quota_val, "tatkal_hour": tatkal_hour, "tatkal_minute": 0},
+            "passengers": st.session_state.passengers,
+            "preferences": {"payment_method": payment_method, "upi_id": upi_id}
         }
 
-        # --- Multi-Browser Launch Logic ---
-        # This loop iterates based on BROWSER_COUNT.
-        # For each iteration, it creates and starts a new thread.
-        # Each thread runs the `run_bot_thread` function, which creates and runs a new IRCTCBot instance.
-        # Each bot instance is given a unique account from the ACCOUNTS list and a unique instance_id.
-        # This ensures that each browser operates independently.
-        threads = []
-        for i in range(config.BROWSER_COUNT):
-            if i < len(config.ACCOUNTS):
-                account = config.ACCOUNTS[i]
-                thread = threading.Thread(
-                    target=run_bot_thread,
-                    args=(account, booking_details, i + 1)
-                )
-                threads.append(thread)
+        active_accounts = [c for c in st.session_state.credentials[:browser_count] if c.get("username")]
+
+        if not active_accounts:
+            st.sidebar.error("No valid accounts entered.")
+        else:
+            st.sidebar.info(f"Launching {len(active_accounts)} bot(s)...")
+            for i, account in enumerate(active_accounts):
+                thread = threading.Thread(target=run_bot_thread, args=(account, booking_data, i + 1))
+                thread.daemon = True
                 thread.start()
-                st.sidebar.write(f"✅ Bot {i+1} for user `{account['username']}` started.")
+            st.sidebar.success("All bots launched!")
+
+    # ---------- Main Form ----------
+    try:
+        with open("src/ui/railwayStationsList.json", "r", encoding="utf-8") as f:
+            stations_data = json.load(f)["stations"]
+        STATION_OPTIONS = [""] + [f"{s['stnName']} ({s['stnCode']})" for s in stations_data]
+    except FileNotFoundError:
+        st.error("Error: `railwayStationsList.json` not found.")
+        return
+
+    st.subheader("Train Details *")
+    col1, col2 = st.columns(2)
+    with col1:
+        from_station_display = st.selectbox("From Station *", options=STATION_OPTIONS, index=0)
+    with col2:
+        to_station_display = st.selectbox("To Station *", options=STATION_OPTIONS, index=0)
+
+    col3, col4 = st.columns(2)
+    with col3:
+        travel_date = st.date_input("Date of Journey *", value=date.today() + timedelta(days=1), min_value=date.today(), format="DD/MM/YYYY")
+    with col4:
+        train_no_input = st.text_input("Train Number *", placeholder="e.g., 12301")
+        if st.button("Find Train Name"):
+            if train_no_input:
+                with st.spinner("Fetching train name..."):
+                    train_name = fetch_train_name(st.session_state.info_driver, train_no_input)
+                    st.info(f"Train Name: {train_name}")
             else:
-                st.sidebar.error(f"❌ Not enough accounts in config.py for Bot {i+1}. Skipping.")
+                st.error("Please enter a train number.")
 
-        st.sidebar.success("All bot threads launched.")
-        st.info("Monitor the console output to see the real-time status of each bot.")
+    col5, col6 = st.columns(2)
+    with col5:
+        train_class_val = st.selectbox("Class *", ["", "AC 3 Tier (3A)", "Sleeper (SL)", "AC 2 Tier (2A)"], placeholder="Select travel class")
+    with col6:
+        quota_val = st.selectbox("Quota *", ["", "TATKAL", "PREMIUM TATKAL", "GENERAL"], index=1)
 
-    st.header("Current Configuration")
-    st.info("This configuration is loaded from `src/config.py`. Edit that file to make changes.")
-    display_config()
+    st.subheader("Passenger Details *")
 
+    max_passengers = 4 if config.TIMED_BOOKING else 6
+    st.caption(f"A maximum of {max_passengers} passengers are allowed for the selected booking type.")
+
+    def add_passenger():
+        if len(st.session_state.passengers) < max_passengers:
+            st.session_state.passengers.append({"name":"", "age": None, "sex": "", "berth":""})
+
+    def delete_passenger(idx):
+        if len(st.session_state.passengers) > 1:
+            st.session_state.passengers.pop(idx)
+
+    for idx, p in enumerate(st.session_state.passengers):
+        st.markdown(f"**Passenger {idx+1}**")
+        r1, r2 = st.columns([3, 1])
+        p['name'] = r1.text_input("Name *", value=p.get('name', ''), key=f"name{idx}").title()
+        p['age'] = r2.number_input("Age *", min_value=1, max_value=99, value=p.get('age'), key=f"age{idx}", placeholder="Age", step=1)
+
+        r3, r4, r5 = st.columns([2, 3, 1])
+        p['sex'] = r3.selectbox("Sex *", ["", "Male", "Female", "Transgender"], key=f"sex{idx}")
+        p['berth'] = r4.selectbox("Berth Preference", ["", "Lower", "Middle", "Upper", "Side Lower", "Side Upper"], key=f"berth{idx}")
+        if len(st.session_state.passengers) > 1:
+            with r5:
+                if st.button("🗑️", key=f"del{idx}", help="Delete this passenger"):
+                    delete_passenger(idx)
+                    st.rerun()
+
+    if len(st.session_state.passengers) < max_passengers:
+        st.button("Add Passenger", on_click=add_passenger)
+
+    st.subheader("Payment & Preferences *")
+    payment_method = st.radio("Payment Method", ["Pay through BHIM UPI"], index=0, horizontal=True)
+    if payment_method == "Pay through BHIM UPI":
+        upi_id = st.text_input("UPI ID *", placeholder="Enter your UPI ID")
+    else:
+        upi_id = ""
+
+    # ---------- Save Logic ----------
+    def all_filled():
+        if not all([from_station_display, to_station_display, train_no_input, train_class_val, quota_val]): return False
+        for p in st.session_state.passengers:
+            if not p['name'] or not p['age'] or not p['sex']: return False
+        if payment_method == "Pay through BHIM UPI" and not upi_id: return False
+        return True
+
+    if st.button("Save Booking Details"):
+        if not all_filled():
+            st.error("Please fill all required (*) fields.")
+        else:
+            from_station = from_station_display.split('(')[-1][:-1]
+            to_station = to_station_display.split('(')[-1][:-1]
+            class_code_match = re.search(r'\((\w+)\)', train_class_val)
+            class_code = class_code_match.group(1) if class_code_match else "CLASS"
+            filename = f"{travel_date.strftime('%d%m%y')}_{train_no_input}_{from_station}_{to_station}_{class_code}.json"
+            filepath = os.path.join("saved_details", filename)
+
+            tatkal_hour = 11 if config.IS_SL else 10
+
+            data_to_save = {
+                "train": {"from_station": from_station, "to_station": to_station, "date": travel_date.strftime("%d/%m/%Y"), "train_no": train_no_input, "class": class_code, "quota": quota_val, "tatkal_hour": tatkal_hour, "tatkal_minute": 0},
+                "passengers": st.session_state.passengers,
+                "preferences": {"payment_method": payment_method, "upi_id": upi_id}
+            }
+            with open(filepath, "w") as f:
+                json.dump(data_to_save, f, indent=2)
+            st.success(f"Booking details saved to `{filepath}`")
+
+
+    # ---------- Live Dashboard & Clock ----------
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Live Dashboard")
+    clock_placeholder = st.sidebar.empty()
+    status_placeholder = st.sidebar.empty()
+
+    # ---------- Live Update Loop (at the end of the script) ----------
+    while True:
+        irctc_time = get_irctc_server_time()
+        if irctc_time:
+            clock_placeholder.markdown(f"**IRCTC Time:** `{irctc_time.strftime('%H:%M:%S.%f')[:-3]}`")
+        else:
+            clock_placeholder.markdown("**IRCTC Time:** `N/A`")
+
+        try:
+            response = requests.get("http://localhost:8000/status", timeout=0.5)
+            if response.ok:
+                statuses = response.json()
+                status_md = ""
+                for bot_id, status in sorted(statuses.items()):
+                    status_md += f"**Bot {bot_id}:** `{status}`\n\n"
+                status_placeholder.markdown(status_md if statuses else "`No bots running.`")
+        except requests.exceptions.RequestException:
+            status_placeholder.markdown("`Connecting...`")
+
+        time.sleep(1)
 
 if __name__ == "__main__":
-    # To run the UI, execute `streamlit run src/ui/app.py` in your terminal.
-    run()
+    run_app()
