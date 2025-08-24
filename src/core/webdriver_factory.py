@@ -1,47 +1,40 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
+import undetected_chromedriver as uc
 import src.config as config
 
 def create_webdriver():
     """
-    Creates and configures a new Selenium Chrome WebDriver instance based on settings in config.py.
+    Creates and configures a new undetected_chromedriver instance based on settings in config.py.
+    This version is patched to be less detectable by services like IRCTC.
 
     Returns:
-        A configured instance of selenium.webdriver.chrome.webdriver.WebDriver.
+        A configured instance of undetected_chromedriver.
     """
-    chrome_options = Options()
+    options = uc.ChromeOptions()
 
-    # Headless mode
+    # Headless mode - Note: Undetected-chromedriver's headless mode can sometimes be less stable/stealthy.
     if config.HEADLESS:
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--window-size=1920,1080") # Recommended for headless
+        options.add_argument("--headless")
+        options.add_argument("--window-size=1920,1080")
 
     # GPU settings
     if not config.USE_GPU:
-        chrome_options.add_argument("--disable-gpu")
+        options.add_argument("--disable-gpu")
 
-    # Other useful arguments for stability and to avoid detection
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/536.36")
+    # Other useful arguments for stability
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--start-maximized")
 
-    # Exclude automation switches to prevent detection
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
+    # User agent can still be useful
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/536.36")
 
-    # Set up the service
     try:
-        service = Service(executable_path=config.CHROMEDRIVER_PATH)
-        driver = webdriver.Chrome(service=service, options=chrome_options)
+        # undetected_chromedriver automatically downloads and manages the driver executable.
+        driver = uc.Chrome(options=options)
     except Exception as e:
-        print(f"Error creating WebDriver: {e}")
-        print("Please ensure that chromedriver is installed and that the 'CHROMEDRIVER_PATH' in 'src/config.py' is correct.")
+        print(f"Error creating undetected WebDriver: {e}")
+        print("Please ensure Google Chrome is installed correctly.")
         return None
-
-    # This helps in preventing detection
-    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
     return driver
 

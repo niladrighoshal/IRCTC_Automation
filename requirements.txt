@@ -6,6 +6,7 @@
 streamlit
 selenium
 requests
+undetected-chromedriver
 
 # --- OCR Dependencies ---
 easyocr

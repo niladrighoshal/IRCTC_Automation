@@ -77,11 +77,6 @@ HEADLESS = False
 # May improve performance on some systems, but can cause issues on others.
 USE_GPU = False
 
-# Path to your chromedriver executable.
-# If chromedriver is in your system's PATH, you can leave this as "chromedriver".
-# Otherwise, provide the full path, e.g., "/path/to/your/chromedriver".
-CHROMEDRIVER_PATH = "chromedriver"
-
 # --- OCR Settings ---
 
 # Set to True to use GPU for captcha solving (if a compatible GPU is available).
