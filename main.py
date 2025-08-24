@@ -1,13 +1,15 @@
 import streamlit as st
-from src.ui.app import run_app
-import os
 import sys
+import os
+
+# This needs to be imported from the new location
+from src.ui.app import run_app
 
 def main():
     """
-    Main function to run the IRCTC Booking Bot application.
+    Main function to run the application.
     """
-    # When running as a PyInstaller executable, the CWD needs to be adjusted.
+    # Adjust CWD for PyInstaller
     if getattr(sys, 'frozen', False):
         os.chdir(sys._MEIPASS)
 
