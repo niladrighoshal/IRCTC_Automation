@@ -2,6 +2,7 @@
 
 # Automation Core
 undetected-chromedriver
+requests
 
 # GUI for passenger details form
 streamlit
