@@ -1,68 +1,59 @@
 import threading
 import time
-from gui_manager import GUIManager
+import json
+import os
 from Automation.orchestrator import BotOrchestrator
+from status_server import run_server
+import json
+import os
+import threading
+import time
 
-# Configuration
-BRAVE_PATH = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
-PROFILE_PATH = r"G:\Project\IRCTC_Tatkal\Automation\BraveProfile"
-AUTOMATION_FOLDER = r"G:\Project\IRCTC_Tatkal\Automation"
+def load_config():
+    """Loads the run configuration from config.json."""
+    try:
+        config_path = os.path.join(os.path.dirname(__file__), "config.json")
+        with open(config_path, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading config.json: {e}")
+        return None
 
-TIMED = False
-AC = True
-SL = True
-USE_GPU = False
-BROWSER_COUNT = 1 # Number of browsers to launch
-
-def automation_task(bot_id, gui_manager):
+def automation_task(bot_id, config):
     """The main task for a single browser/thread."""
+    run_config = config.get("run_config", {})
     try:
         bot = BotOrchestrator(
             bot_id=bot_id,
-            gui_manager=gui_manager,
-            automation_folder=AUTOMATION_FOLDER,
-            use_gpu=USE_GPU
+            automation_folder=os.path.join(os.path.dirname(__file__), "Automation"),
+            use_gpu=run_config.get("use_gpu", False)
         )
-        bot.run_booking_flow(
-            brave_path=BRAVE_PATH,
-            profile_path=PROFILE_PATH,
-            timed_booking=TIMED,
-            ac_booking=AC,
-            sl_booking=SL
-        )
+        bot.run_booking_flow(config=config)
     except Exception as e:
-        # Log fatal error to the GUI if possible
+        # The bot's own logging will handle reporting this to the server
+        print(f"[{bot_id}] A fatal error occurred: {e}")
         if 'bot' in locals() and bot is not None:
-            bot._log(f"FATAL ERROR: {e}")
             bot.stop()
-        else:
-            print(f"[{bot_id}] A fatal error occurred: {e}")
 
 def main():
-    if BROWSER_COUNT < 1:
-        print("BROWSER_COUNT must be at least 1.")
+    config = load_config()
+    if not config:
+        print("Could not load config.json. Exiting.")
         return
 
-    gui_manager = GUIManager()
+    browser_count = config.get("run_config", {}).get("browser_count", 1)
+
     threads = []
-
-    for i in range(BROWSER_COUNT):
+    for i in range(browser_count):
         bot_id = i + 1
-        x_offset = (i % 4) * 320
-        y_offset = (i // 4) * 220
-
-        # GUIManager creates and stores the windows
-        gui_manager.create_bot_windows(bot_id, x_offset, y_offset)
-
-        thread = threading.Thread(target=automation_task, args=(bot_id, gui_manager), daemon=True)
+        thread = threading.Thread(target=automation_task, args=(bot_id, config))
         threads.append(thread)
         thread.start()
-        time.sleep(2)
+        time.sleep(2) # Stagger browser launches slightly
 
-    # The GUIManager runs the main loop
-    gui_manager.run()
+    for t in threads:
+        t.join() # Wait for all bot threads to complete
 
 if __name__ == "__main__":
-    print(f"Starting IRCTC Bot with {BROWSER_COUNT} browser(s) in 3 seconds...")
-    time.sleep(3)
+    print("Bot process started. Reading config.json...")
     main()
