@@ -160,6 +160,10 @@ for idx, passenger in enumerate(st.session_state.passengers):
 if len(st.session_state.passengers) < 6:
     st.button("Add Passenger", on_click=add_passenger)
 
+# ---------- Contact Details ----------
+st.subheader("Contact Details *")
+mobile_number = st.text_input("Mobile Number *", placeholder="Enter 10-digit mobile number to get ticket details", max_chars=10)
+
 # ---------- Booking Preferences ----------
 st.subheader("Booking Preferences *")
 auto_upgrade = st.checkbox("Consider for Auto Upgradation", value=True)
@@ -182,7 +186,7 @@ else:
 
 # ---------- Helpers ----------
 def all_filled():
-    if not all([username, password, from_station, to_station, train_no, train_class_val, quota_val]):
+    if not all([username, password, from_station, to_station, train_no, train_class_val, quota_val, mobile_number]):
         return False
     for p in st.session_state.passengers:
         if not p["name"] or p["age"] is None or not p["sex"] or not p["nationality"] or not p["berth"]:
@@ -191,16 +195,23 @@ def all_filled():
         return False
     return True
 
-SAVE_DIR = "saved_details"
+# Corrected save directory to match automation script's expectation
+SAVE_DIR_NAME = "Saved_Details"
+# Get the directory of the current script, which is 'Form/'
+script_dir = os.path.dirname(__file__)
+# Create the full path to the save directory, e.g., 'Form/Saved_Details'
+SAVE_DIR = os.path.join(script_dir, SAVE_DIR_NAME)
 os.makedirs(SAVE_DIR, exist_ok=True)  # Create folder if not exists
 
 def next_available_filename(base_name: str) -> str:
     name, ext = os.path.splitext(base_name)
+    # Use the full path for checking existence
     candidate_path = os.path.join(SAVE_DIR, base_name)
     if not os.path.exists(candidate_path):
         return candidate_path
     i = 1
     while True:
+        # Use the full path for checking existence
         candidate_path = os.path.join(SAVE_DIR, f"{name}_{i}{ext}")
         if not os.path.exists(candidate_path):
             return candidate_path
@@ -218,6 +229,7 @@ if st.button("Save Booking Details"):
     else:
         data = {
             "login": {"username": username, "password": password},
+            "contact": {"mobile_number": mobile_number},
             "train": {
                 "from_station": from_station,
                 "to_station": to_station,
