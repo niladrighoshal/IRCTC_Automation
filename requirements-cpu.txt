@@ -1,0 +1,21 @@
+# For systems running on CPU
+
+# Automation Core
+undetected-chromedriver
+
+# GUI for passenger details form
+streamlit
+
+# OCR for Captcha Solving
+easyocr
+
+# The following are core dependencies of easyocr, listed for clarity.
+# Installing easyocr should handle these automatically, but pinning them can be useful.
+torch
+torchvision
+numpy
+Pillow
+pyyaml
+scipy
+ninja
+cython
