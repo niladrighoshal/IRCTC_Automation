@@ -10,8 +10,10 @@ import string
 ALLOWED_CHARS = string.ascii_letters + string.digits + string.punctuation
 
 class CaptchaSolver:
-    def __init__(self):
-        self.reader = easyocr.Reader(['en'], gpu=torch.cuda.is_available())
+    def __init__(self, use_gpu=False):
+        # Initialize with GPU if requested and available, otherwise CPU
+        gpu_enabled = use_gpu and torch.cuda.is_available()
+        self.reader = easyocr.Reader(['en'], gpu=gpu_enabled)
 
     def preprocess_image(self, pil_img):
         gray = pil_img.convert("L")

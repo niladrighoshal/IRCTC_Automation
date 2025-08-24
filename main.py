@@ -1,48 +1,66 @@
 # main.py
 import threading
+import time
 from gui_status import FloatingGUI
-from Automation.login import IRCTCLogin
+from Automation.orchestrator import BotOrchestrator
 
 # Configuration
 BRAVE_PATH = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
 PROFILE_PATH = r"G:\Project\IRCTC_Tatkal\Automation\BraveProfile"
 AUTOMATION_FOLDER = r"G:\Project\IRCTC_Tatkal\Automation"
 
-TIMED = True
+TIMED = False
 AC = True
-SL = False
+SL = True
 USE_GPU = False
+BROWSER_COUNT = 1 # Number of browsers to launch
 
 def automation_task(gui):
-    bot = IRCTCLogin(automation_folder=AUTOMATION_FOLDER, gui=gui, use_gpu=USE_GPU)
-    success = bot.login(brave_path=BRAVE_PATH, profile_path=PROFILE_PATH)
-    # give driver to GUI (GUI itself does not use it directly, but you may want it)
-    if bot.driver:
-        gui.set_driver(bot.driver)
-    if success:
-        gui.set_status_text("Logged in successfully")
-    else:
-        gui.set_status_text("Login failed")
-
-    # timed booking flow (placeholders)
-    if success and TIMED:
-        target_time = "09:59:00" if AC else "10:59:00"
-        gui.set_status_text(f"Waiting until {target_time} to start booking...")
-        bot.wait_until(target_time)
-        gui.set_status_text("Filling train details...")
-        bot.fill_train_details(AC=AC, SL=SL)
-        target_time_search = "10:00:00" if AC else "11:00:00"
-        gui.set_status_text(f"Waiting until {target_time_search} to press Search...")
-        bot.wait_until(target_time_search)
-        gui.set_status_text("Pressing search...")
-        bot.press_search_button()
+    """The main task for a single browser/thread."""
+    try:
+        bot = BotOrchestrator(automation_folder=AUTOMATION_FOLDER, gui=gui, use_gpu=USE_GPU)
+        bot.run_booking_flow(
+            brave_path=BRAVE_PATH,
+            profile_path=PROFILE_PATH,
+            timed_booking=TIMED,
+            ac_booking=AC,
+            sl_booking=SL
+        )
+    except Exception as e:
+        # Broad exception handler to catch any unexpected errors in the thread
+        if 'bot' in locals() and bot is not None:
+            bot._log(f"FATAL ERROR: {e}")
+            bot.stop()
+        else:
+            print(f"A fatal error occurred before bot initialization: {e}")
 
 def main():
-    gui = FloatingGUI()
-    t = threading.Thread(target=automation_task, args=(gui,), daemon=True)
-    t.start()
-    gui.run()
-    
+    if BROWSER_COUNT < 1:
+        print("BROWSER_COUNT must be at least 1.")
+        return
+
+    threads = []
+    guis = []
+
+    for i in range(BROWSER_COUNT):
+        # Stagger the GUI windows
+        x_offset = (i % 4) * 320
+        y_offset = (i // 4) * 220
+
+        gui = FloatingGUI(x_offset=x_offset, y_offset=y_offset)
+        guis.append(gui)
+
+        thread = threading.Thread(target=automation_task, args=(gui,), daemon=True)
+        threads.append(thread)
+        thread.start()
+        time.sleep(2) # Stagger browser launches slightly
+
+    # The mainloop of one GUI will keep the script alive for all windows
+    if guis:
+        guis[0].run()
 
 if __name__ == "__main__":
+    # Add a small delay before starting everything
+    print(f"Starting IRCTC Bot with {BROWSER_COUNT} browser(s) in 3 seconds...")
+    time.sleep(3)
     main()
