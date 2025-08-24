@@ -1,7 +1,6 @@
-# main.py
 import threading
 import time
-from gui_status import FloatingGUI
+from gui_manager import GUIManager
 from Automation.orchestrator import BotOrchestrator
 
 # Configuration
@@ -15,10 +14,15 @@ SL = True
 USE_GPU = False
 BROWSER_COUNT = 1 # Number of browsers to launch
 
-def automation_task(gui):
+def automation_task(bot_id, gui_manager):
     """The main task for a single browser/thread."""
     try:
-        bot = BotOrchestrator(automation_folder=AUTOMATION_FOLDER, gui=gui, use_gpu=USE_GPU)
+        bot = BotOrchestrator(
+            bot_id=bot_id,
+            gui_manager=gui_manager,
+            automation_folder=AUTOMATION_FOLDER,
+            use_gpu=USE_GPU
+        )
         bot.run_booking_flow(
             brave_path=BRAVE_PATH,
             profile_path=PROFILE_PATH,
@@ -27,40 +31,38 @@ def automation_task(gui):
             sl_booking=SL
         )
     except Exception as e:
-        # Broad exception handler to catch any unexpected errors in the thread
+        # Log fatal error to the GUI if possible
         if 'bot' in locals() and bot is not None:
             bot._log(f"FATAL ERROR: {e}")
             bot.stop()
         else:
-            print(f"A fatal error occurred before bot initialization: {e}")
+            print(f"[{bot_id}] A fatal error occurred: {e}")
 
 def main():
     if BROWSER_COUNT < 1:
         print("BROWSER_COUNT must be at least 1.")
         return
 
+    gui_manager = GUIManager()
     threads = []
-    guis = []
 
     for i in range(BROWSER_COUNT):
-        # Stagger the GUI windows
+        bot_id = i + 1
         x_offset = (i % 4) * 320
         y_offset = (i // 4) * 220
 
-        gui = FloatingGUI(x_offset=x_offset, y_offset=y_offset)
-        guis.append(gui)
+        # GUIManager creates and stores the windows
+        gui_manager.create_bot_windows(bot_id, x_offset, y_offset)
 
-        thread = threading.Thread(target=automation_task, args=(gui,), daemon=True)
+        thread = threading.Thread(target=automation_task, args=(bot_id, gui_manager), daemon=True)
         threads.append(thread)
         thread.start()
-        time.sleep(2) # Stagger browser launches slightly
+        time.sleep(2)
 
-    # The mainloop of one GUI will keep the script alive for all windows
-    if guis:
-        guis[0].run()
+    # The GUIManager runs the main loop
+    gui_manager.run()
 
 if __name__ == "__main__":
-    # Add a small delay before starting everything
     print(f"Starting IRCTC Bot with {BROWSER_COUNT} browser(s) in 3 seconds...")
     time.sleep(3)
     main()
