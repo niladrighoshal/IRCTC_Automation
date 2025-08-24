@@ -80,13 +80,12 @@ The project is organized into a modular structure for clarity and maintainabilit
 
 1.  **Prerequisites:**
     -   Python 3.8+
-    -   Google Chrome browser
-    -   `chromedriver` matching your Chrome version.
+    -   Google Chrome browser installed in the default location.
 
 2.  **Installation:**
     -   Clone the repository.
     -   Install Python dependencies: `pip install -r requirements.txt`
-    -   Place the `chromedriver` executable in the project's root directory or ensure it's in your system's PATH.
+    -   **Note:** You do **not** need to manually download `chromedriver`. The `undetected-chromedriver` library handles this automatically.
 
 3.  **Configuration:**
     -   Open `src/config.py` and carefully fill in all your details (accounts, journey, passengers, etc.).
