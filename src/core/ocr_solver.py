@@ -1,15 +1,5 @@
-import io
-import base64
-import string
-import requests
-import numpy as np
+import io, base64, string, requests, numpy as np, easyocr, warnings, os, sys, torch, time
 from PIL import Image, ImageOps, ImageFilter
-import easyocr
-import warnings
-import os
-import sys
-import torch
-import time
 
 warnings.filterwarnings("ignore")
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -19,7 +9,6 @@ ocr_ready = False
 ALLOWED_CHARS = string.ascii_letters + string.digits
 
 def initialize_ocr_model(use_gpu=True):
-    """Target function for background thread to initialize the OCR model."""
     global reader, ocr_ready
     if reader is None:
         print("Background OCR model loading started...")
@@ -43,42 +32,33 @@ def _url_to_image(source, logger=None):
             return Image.open(io.BytesIO(response.content)).convert("RGB")
     except Exception as e:
         if logger: logger.error(f"Failed to convert source to image: {e}")
-        return None
     return None
 
 def _preprocess_image(pil_img):
     gray = pil_img.convert("L")
     contrast = ImageOps.autocontrast(gray, cutoff=2)
-    sharpened = contrast.filter(ImageFilter.SHARPEN)
-    return sharpened
+    return contrast.filter(ImageFilter.SHARPEN)
 
 def solve_captcha(image_source, use_gpu=True, logger=None):
     start_time = time.time()
     try:
         if not ocr_ready:
             if logger: logger.info("Waiting for OCR model to load...")
-            while not ocr_ready:
-                time.sleep(0.2)
+            while not ocr_ready: time.sleep(0.2)
 
         img = _url_to_image(image_source, logger)
         if not img: return ""
 
         processed_img = _preprocess_image(img)
-        img_np = np.array(processed_img)
-        result = reader.readtext(
-            img_np,
-            decoder='greedy', batch_size=1, detail=0, paragraph=True
-        )
+        result = reader.readtext(np.array(processed_img), decoder='greedy', batch_size=1, detail=0, paragraph=True)
 
         if result:
             cleaned_text = ''.join(ch for ch in ''.join(result) if ch in ALLOWED_CHARS)
-            if logger:
-                duration = time.time() - start_time
-                logger.info(f"OCR solved captcha as '{cleaned_text}' in {duration:.2f}s.")
+            if logger: logger.info(f"OCR solved as '{cleaned_text}' in {time.time() - start_time:.2f}s.")
             return cleaned_text
 
-        if logger: logger.warning("OCR could not detect any text in the captcha.")
+        if logger: logger.warning("OCR could not detect any text.")
         return ""
     except Exception as e:
-        if logger: logger.error(f"An exception occurred during captcha solving: {e}", exc_info=True)
+        if logger: logger.error(f"Captcha solving exception: {e}", exc_info=True)
         return ""
