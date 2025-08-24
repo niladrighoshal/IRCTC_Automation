@@ -1,35 +1,38 @@
 import streamlit as st
-import json, os
-from datetime import date, datetime, timedelta
+import os
+import json
 
-# This is the user's full provided UI code.
-# I will modify this in subsequent steps.
+def run_app():
+    # --- Setup Directories & Files to prevent crashes ---
+    os.makedirs("saved_details", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
 
-st.markdown("""<style>...</style>""", unsafe_allow_html=True) # Abridged
-st.markdown("<div class='branding'>IRCTC Tatkal Booking Form</div>", unsafe_allow_html=True)
+    if not os.path.exists("credentials.json"):
+        with open("credentials.json", "w") as f:
+            json.dump([], f)
 
-# This path will be corrected later if needed.
-# For now, assuming it's in the root.
-with open("railwayStationsList.json", "r", encoding="utf-8") as f:
-    stations_data = json.load(f)["stations"]
-STATION_DISPLAY_OPTIONS = [""] + [f"{s['stnName']} ({s['stnCode']})" for s in stations_data]
+    # --- UI ---
+    st.set_page_config(layout="wide", page_title="IRCTC Bot")
+    st.markdown("<div class='branding'>IRCTC Tatkal Booking Form</div>", unsafe_allow_html=True)
 
-if "passengers" not in st.session_state:
-    st.session_state.passengers = [{"name":"", "age": None, "sex": "", "nationality":"Indian", "berth":""}]
+    # --- Load station list ---
+    with open("src/ui/railwayStationsList.json", "r", encoding="utf-8") as f:
+        stations_data = json.load(f)["stations"]
+    STATION_DISPLAY_OPTIONS = [""] + [f"{s['stnName']} ({s['stnCode']})" for s in stations_data]
 
-st.subheader("IRCTC Login *")
-username = st.text_input("Username *", placeholder="Enter your IRCTC username")
-password = st.text_input("Password *", type="password", placeholder="Enter your IRCTC password", key="pwd")
+    if "passengers" not in st.session_state:
+        st.session_state.passengers = [{"name":"", "age": None, "sex": ""}]
 
-st.subheader("Train Details *")
-# ... (Full form from user's code) ...
+    st.subheader("Train Details *")
+    c1, c2 = st.columns(2)
+    c1.selectbox("From Station *", options=STATION_DISPLAY_OPTIONS)
+    c2.selectbox("To Station *", options=STATION_DISPLAY_OPTIONS)
 
-st.subheader("Passenger Details *")
-# ... (Full passenger form from user's code) ...
+    st.subheader("Passenger Details *")
+    st.info("Passenger form will be implemented here.")
 
-st.subheader("Booking Preferences *")
-# ... (Full preferences form from user's code) ...
+    if st.button("Save Booking Details"):
+        st.info("Save logic to be implemented.")
 
-# ... (Full save logic from user's code) ...
-
-st.markdown("<p>Powered by Niladri Ghoshal</p>", unsafe_allow_html=True)
+if __name__ == "__main__":
+    run_app()
