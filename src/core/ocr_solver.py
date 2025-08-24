@@ -15,23 +15,21 @@ warnings.filterwarnings("ignore")
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 reader = None
+ocr_ready = False
 ALLOWED_CHARS = string.ascii_letters + string.digits
 
-def _initialize_reader(use_gpu=True, logger=None):
-    global reader
+def initialize_ocr_model(use_gpu=True):
+    """Target function for background thread to initialize the OCR model."""
+    global reader, ocr_ready
     if reader is None:
-        if logger:
-            logger.info(f"Initializing EasyOCR reader... (GPU: {use_gpu})")
-
-        old_stdout = sys.stdout
-        sys.stdout = open(os.devnull, 'w')
+        print("Background OCR model loading started...")
+        old_stdout, sys.stdout = sys.stdout, open(os.devnull, 'w')
         try:
             reader = easyocr.Reader(['en'], gpu=use_gpu)
+            ocr_ready = True
+            print("Background OCR model loading complete.")
         finally:
             sys.stdout = old_stdout
-
-        if logger:
-            logger.info("EasyOCR reader initialized successfully.")
 
 def _url_to_image(source, logger=None):
     source = source.strip()
@@ -57,7 +55,11 @@ def _preprocess_image(pil_img):
 def solve_captcha(image_source, use_gpu=True, logger=None):
     start_time = time.time()
     try:
-        _initialize_reader(use_gpu, logger)
+        if not ocr_ready:
+            if logger: logger.info("Waiting for OCR model to load...")
+            while not ocr_ready:
+                time.sleep(0.2)
+
         img = _url_to_image(image_source, logger)
         if not img: return ""
 

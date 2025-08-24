@@ -1,15 +1,16 @@
-# IRCTC Tatkal Booking Bot (v3 - Intelligent Automaton)
+# IRCTC Tatkal Booking Bot (v3.1 - Intelligent & Performant)
 
-This is a high-performance, multi-threaded application designed to automate the process of booking IRCTC Tatkal tickets. This intelligent version features a sophisticated UI, resilient state-machine architecture, and advanced multi-stage timing for a professional-grade booking experience.
+This is a high-performance, multi-threaded application designed to automate the process of booking IRCTC Tatkal tickets. This intelligent version features a sophisticated UI, resilient state-machine architecture, advanced multi-stage timing, and a high-performance, silent-loading architecture for a professional-grade booking experience.
 
 ---
 
 ## 🌟 Key Features
 
+- **High-Performance Startup:** The application starts instantly. Heavy components like the OCR model and web drivers are loaded silently in the background while you fill out the form.
 - **Advanced UI Form:** A rich user interface for creating, saving, and loading detailed booking configurations.
-- **State-Machine Core:** The bot is no longer a simple script. It's a resilient automaton that understands its current state on the website and can recover from unexpected glitches like being logged out.
+- **State-Machine Core:** The bot is a resilient automaton that understands its current state on the website and can recover from unexpected glitches like being logged out.
 - **Advanced Multi-Stage Timing:** For Tatkal bookings, the bot follows a precise sequence: opening the browser 3 minutes before, logging in 1 minute before, and initiating the search at the exact moment the window opens.
-- **Intelligent Popup Handling:** A high-speed observer constantly watches for and instantly closes known popups (like Aadhaar or Disha banners) without interrupting the main workflow.
+- **Intelligent Popup Handling:** A high-speed observer constantly watches for and instantly closes known popups.
 - **Full Automation:** End-to-end automation, including OCR-based captcha solving.
 - **Live Dashboard:** A real-time dashboard in the UI sidebar shows the live status of each bot and a synchronized IRCTC server clock.
 - **Complete Session & Credential Management:** Save/load booking sessions and user accounts.
@@ -19,37 +20,21 @@ This is a high-performance, multi-threaded application designed to automate the 
 
 ## ⚙️ How It Works: The Intelligent Flow
 
-1.  **Configuration:** The user configures a booking using the advanced UI, then configures runtime settings (Tatkal mode, browser count, etc.) in the sidebar.
-2.  **Launch:** When "Launch" is clicked, the UI starts a new thread for each bot.
-3.  **Timed Sequence (for Tatkal):**
-    -   **T-3 Minutes:** The bot calculates the synchronized time and waits. At T-3m, it opens a browser window and navigates to the IRCTC homepage.
-    -   **T-1 Minute:** The bot waits again. At T-1m, it performs the login (solving the captcha automatically) and fills in all the journey details on the main page.
-    -   The bot now waits, poised for the exact Tatkal opening time.
-4.  **State-Machine Execution:**
-    -   At the moment the Tatkal window opens, the bot clicks "Find Trains".
-    -   From this point forward, it enters a **resilient state-machine loop**.
-    -   In the loop, it constantly checks: "What page am I on?" (`_get_current_state`) and "Are there any popups?" (`_handle_popups`).
-    -   Based on the state, it executes the correct action (e.g., `_select_train_and_class`, `_fill_passenger_details`).
-    -   **If it's unexpectedly logged out, the state check will detect this, and the bot will automatically try to log back in and continue.**
-5.  **Completion:** The process finishes after payment is initiated. The live dashboard will show the final status.
+1.  **Instant Launch:** The user runs `python master.py`. The Streamlit UI starts instantly.
+2.  **Silent Background Loading:** As soon as the UI opens, two background threads are started: one to initialize the OCR engine and another to start the headless browser for the "Find Train Name" feature.
+3.  **Configuration:** The user fills out the booking form, loads a saved session, and configures runtime settings and accounts in the sidebar. By the time they are done, the background resources are ready.
+4.  **Launch Bots:** When "Launch" is clicked, the application starts the bot threads.
+5.  **Timed Sequence & State Machine:** The bot executes its timed sequence for Tatkal bookings and then transitions into the resilient state-machine loop to handle the rest of the process robustly, recovering from any glitches.
+6.  **Live Monitoring:** The user can monitor the exact status of each bot in real-time via the live dashboard.
 
 ---
 
-## 📂 File Architecture
+## 📂 File Architecture & Setup
 
-The project uses a highly modular structure. Key files include:
--   `master.py`: The main script to run the application.
--   `src/ui/app.py`: The complete Streamlit UI, including the form, sidebar, and live dashboard client.
--   `src/core/bot.py`: The heart of the application. Contains the state-machine logic, the timed sequence, and all booking action methods.
--   `src/utils/status_server.py`: The background server that powers the live dashboard.
--   `credentials.json` & `saved_details/`: Directories for storing user data.
-
----
-
-## 🚀 Setup and Usage
-
-1.  **Prerequisites:** Python 3.8+, Google Chrome.
-2.  **Installation:** `pip install -r requirements.txt`.
-3.  **Run:** `python master.py`.
-4.  **First-Time Use:** Configure your accounts in the sidebar and click "Save Credentials".
-5.  **Operation:** Fill out the booking form (or load a saved session), configure the sidebar toggles, and click "🚀 Launch Booking Bots". The process is fully automated.
+-   **Run:** `python master.py`
+-   **Dependencies:** `pip install -r requirements.txt`
+-   **Documentation:** All files are structured and commented. Key files include:
+    -   `src/ui/app.py`: The complete Streamlit UI, including background loading logic.
+    -   `src/core/bot.py`: The state-machine and timing logic for the bot.
+    -   `src/core/ocr_solver.py`: The OCR engine, now loaded in the background.
+    -   `src/utils/train_info.py`: The train name fetcher, now loaded in the background.

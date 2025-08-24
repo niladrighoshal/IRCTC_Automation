@@ -14,14 +14,23 @@ from src.utils.time_utils import get_irctc_server_time
 from src.core.bot_runner import run_bot_thread
 from src.utils.train_info import init_persistent_driver, fetch_train_name
 
+from src.core.ocr_solver import initialize_ocr_model
+
 # --- Initialize Session State on first run ---
 def init_session_state():
     if "server_started" not in st.session_state:
         st.session_state.server_started = True
         start_server_in_thread()
 
-    if "info_driver" not in st.session_state:
-        st.session_state.info_driver = init_persistent_driver()
+    if "background_loaders_started" not in st.session_state:
+        st.session_state.info_driver = None
+        st.session_state.background_loaders_started = True
+
+        def _load_driver():
+            st.session_state.info_driver = init_persistent_driver()
+        threading.Thread(target=_load_driver, daemon=True).start()
+
+        threading.Thread(target=initialize_ocr_model, args=(config.USE_GPU,), daemon=True).start()
 
     if "passengers" not in st.session_state:
         st.session_state.passengers = [{"name":"", "age": None, "sex": "", "berth":""}]
@@ -29,8 +38,16 @@ def init_session_state():
     if "credentials" not in st.session_state:
         CRED_FILE = "credentials.json"
         if os.path.exists(CRED_FILE):
-            with open(CRED_FILE, "r") as f:
-                st.session_state.credentials = json.load(f)
+            try:
+                with open(CRED_FILE, "r") as f:
+                    # Handle case where file is empty
+                    content = f.read()
+                    if content:
+                        st.session_state.credentials = json.loads(content)
+                    else:
+                        st.session_state.credentials = []
+            except (json.JSONDecodeError, FileNotFoundError):
+                st.session_state.credentials = [] # Default to empty list if corrupt or missing
         else:
             st.session_state.credentials = []
 
@@ -163,8 +180,15 @@ def run_app():
         if st.button("Find Train Name"):
             if train_no_input:
                 with st.spinner("Fetching train name..."):
-                    train_name = fetch_train_name(st.session_state.info_driver, train_no_input)
-                    st.info(f"Train Name: {train_name}")
+                    wait_start = time.time()
+                    while st.session_state.info_driver is None and time.time() - wait_start < 20:
+                        time.sleep(0.2)
+
+                    if st.session_state.info_driver:
+                        train_name = fetch_train_name(st.session_state.info_driver, train_no_input)
+                        st.info(f"Train Name: {train_name}")
+                    else:
+                        st.error("Info driver failed to initialize in time.")
             else:
                 st.error("Please enter a train number.")
 
