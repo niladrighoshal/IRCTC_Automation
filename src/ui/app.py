@@ -4,7 +4,6 @@ import os
 import re
 import sys
 import subprocess
-import webbrowser
 import pandas as pd
 import glob
 from datetime import date, datetime, timedelta
@@ -496,11 +495,16 @@ if st.sidebar.button("Start BOT", use_container_width=True):
             "contact": {"phone": st.session_state.get("phone_no","")},
             "logins": st.session_state.get("logins", []),
             "preferences": {
-                "auto_upgrade": st.session_state.get("auto_upgrade", True), "confirm_only": st.session_state.get("confirm_only", True),
-                "payment": st.session_state.get("payment_method", payment_method), "upi_id": st.session_state.get("upi_id", ""),
-                "timed": st.session_state.get("timed", timed), "ac": st.session_state.get("ac_toggle", ac_toggle),
-                "sl": st.session_state.get("sl_toggle", sl_toggle), "ocr_cpu": st.session_state.get("ocr_cpu", ocr_cpu),
-                "headless": st.session_state.get("headless", headless), "browser_count": st.session_state.get("browser_count", browser_count)
+                "auto_upgrade": auto_upgrade,
+                "confirm_only": confirm_only,
+                "payment": payment_method,
+                "upi_id": upi_id,
+                "timed": timed,
+                "ac": ac_toggle,
+                "sl": sl_toggle,
+                "ocr_cpu": ocr_cpu,
+                "headless": headless,
+                "browser_count": browser_count
             },
             "saved_at": datetime.now().isoformat(timespec="seconds")
         }
@@ -522,11 +526,7 @@ if st.sidebar.button("Start BOT", use_container_width=True):
             with open("bot_launcher.log", "w") as log_file:
                 subprocess.Popen([sys.executable, bot_script_path], stdout=log_file, stderr=subprocess.STDOUT)
 
-            # Open the dashboard in a new browser tab
-            dashboard_url = "http://localhost:8889"
-            webbrowser.open_new_tab(dashboard_url)
-            st.sidebar.success(f"✅ Bot started! Opening dashboard...")
-            st.sidebar.markdown(f"If it doesn't open automatically, [click here to view the dashboard]({dashboard_url}).")
+            st.sidebar.success(f"✅ Bot started! Status will appear below.")
 
         except FileNotFoundError:
             st.sidebar.error("Error: 'run_bot.py' not found. Cannot start the bot.")
@@ -541,32 +541,64 @@ st.subheader("Live Bot Status")
 st_autorefresh(interval=3000, limit=None, key="dashboard_refresh")
 
 def display_status_dashboard():
+    """
+    Scans for bot status files and displays them in a structured, detailed way.
+    This function is now designed to parse the new log format which is a list of actions.
+    """
     log_files = glob.glob(os.path.join('logs', '*_status.json'))
 
     if not log_files:
         st.info("No active bots found. Click 'Start BOT' to begin.")
         return
 
-    all_statuses = []
-    for f in sorted(log_files):
-        try:
-            instance_id = os.path.basename(f).split('_')[1]
-            with open(f, 'r') as fh:
-                data = json.load(fh)
-                all_statuses.append({
-                    "Browser": f"Instance {instance_id}",
-                    "Last Update": data.get('timestamp', ''),
-                    "Status": data.get('status', 'N/A')
-                })
-        except (IOError, json.JSONDecodeError, IndexError):
-            # Handle cases where the file is being written to or is corrupted
-            continue
+    # Create columns for a cleaner layout
+    cols = st.columns(len(log_files))
 
-    if all_statuses:
-        df = pd.DataFrame(all_statuses)
-        df = df.set_index("Browser")
-        st.dataframe(df, use_container_width=True)
-    else:
+    for idx, f in enumerate(sorted(log_files)):
+        with cols[idx]:
+            try:
+                instance_id = os.path.basename(f).split('_')[1]
+                with open(f, 'r', encoding="utf-8") as fh:
+                    # The status file now contains a list of log dictionaries
+                    log_data = json.load(fh)
+
+                if not isinstance(log_data, list) or not log_data:
+                    st.warning(f"Bot {instance_id}: Waiting for status...")
+                    continue
+
+                # The last item in the list is the most recent status
+                latest_log = log_data[-1]
+                current_state = latest_log.get('state', 'UNKNOWN')
+                last_update_raw = latest_log.get('timestamp', '')
+
+                # Format timestamp for display
+                try:
+                    last_update_dt = datetime.fromisoformat(last_update_raw)
+                    last_update_str = last_update_dt.strftime('%H:%M:%S')
+                except ValueError:
+                    last_update_str = "Invalid Time"
+
+                # Display the main status card
+                st.metric(label=f"🤖 Browser Instance {instance_id}", value=current_state, delta=f"Last Update: {last_update_str}")
+
+                # Display the detailed log in an expander
+                with st.expander("Show Detailed Log"):
+                    log_html = "<div style='font-family: monospace; font-size: 13px; max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; padding: 5px; border-radius: 5px;'>"
+                    # Reverse the log so the newest is at the top
+                    for entry in reversed(log_data):
+                        ts = datetime.fromisoformat(entry.get('timestamp')).strftime('%H:%M:%S')
+                        msg = entry.get('message', 'No message')
+                        color = "red" if entry.get('is_error') else ("orange" if entry.get('is_state_change') else "inherit")
+                        log_html += f"<div style='color:{color};'><strong>[{ts}]</strong> {msg}</div>"
+                    log_html += "</div>"
+                    st.markdown(log_html, unsafe_allow_html=True)
+
+            except (IOError, json.JSONDecodeError, IndexError) as e:
+                # This can happen if the file is being written at the exact moment we read it
+                st.warning(f"Could not read status for Bot {instance_id}. It might be starting up. Error: {e}")
+                continue
+
+    if not log_files:
         st.info("Waiting for first status update from bots...")
 
 display_status_dashboard()
