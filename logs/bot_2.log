@@ -1,0 +1,86 @@
+2025-08-24 23:37:06 - [Bot 2] - INFO - Bot for user 'testuser2' initialized.
+2025-08-24 23:37:06 - [Bot 2] - INFO - Status: STARTING
+2025-08-24 23:37:09 - [Bot 2] - INFO - Popup killer thread started.
+2025-08-24 23:37:15 - [Bot 2] - INFO - Status: Screenshot saved to bot_2_screenshot.png
+2025-08-24 23:37:15 - [Bot 2] - INFO - Starting Normal Booking flow.
+2025-08-24 23:37:15 - [Bot 2] - INFO - Entering resilient state-machine loop.
+2025-08-24 23:37:19 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:37:19 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:37:28 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:37:28 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:37:37 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:37:37 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:37:47 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:37:47 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:37:56 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:37:56 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:38:05 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:38:05 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:38:15 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:38:15 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:38:24 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:38:24 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:38:33 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:38:33 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:38:42 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:38:42 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:38:52 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:38:52 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:39:01 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:39:01 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:39:11 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:39:11 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:39:20 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:39:20 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:39:29 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:39:29 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:39:39 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:39:39 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:39:48 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:39:48 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:39:57 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:39:57 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:40:06 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:40:07 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:40:16 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:40:16 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:40:25 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:40:25 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:40:35 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:40:35 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:40:44 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:40:44 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:40:53 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:40:53 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:41:02 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:41:02 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:41:12 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:41:12 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:41:21 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:41:21 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:41:31 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:41:31 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:41:40 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:41:40 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:41:49 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:41:49 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:41:59 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:41:59 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:42:08 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:42:08 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:42:18 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:42:18 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:42:28 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:42:28 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:42:37 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:42:37 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:42:46 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:42:46 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:42:55 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:42:55 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:43:05 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:43:05 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:43:14 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:43:14 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
+2025-08-24 23:43:23 - [Bot 2] - INFO - Status: State: UNKNOWN
+2025-08-24 23:43:23 - [Bot 2] - WARNING - In UNKNOWN state, please check browser.
