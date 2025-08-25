@@ -1,9 +1,12 @@
 {
   "train": {
-    "from_station": "HWH",
-    "to_station": "ADI",
-    "date": "14/10/2025",
+    "from_input": "Howrah Junction (HWH)",
+    "from_code": "HWH",
+    "to_input": "Ahmedabad Junction (ADI)",
+    "to_code": "ADI",
+    "date": "26082025",
     "train_no": "12834",
+    "train_name": "",
     "class": "AC 3 Tier (3A)",
     "quota": "GENERAL"
   },
@@ -23,12 +26,20 @@
       "berth": "Lower"
     }
   ],
+  "contact": {
+    "phone": "9635311895"
+  },
   "preferences": {
     "auto_upgrade": true,
     "confirm_only": true,
-    "payment_method": "Pay through BHIM UPI",
+    "payment": "Pay through BHIM UPI",
     "upi_id": "niladrighoshal.20-9@okicici",
-    "phone_number": "1234567890"
+    "timed": false,
+    "ac": false,
+    "sl": false,
+    "ocr_cpu": true,
+    "headless": false,
+    "browser_count": 1
   },
-  "saved_at": "2025-08-23T22:04:48"
+  "saved_at": "2025-08-25T14:00:49"
 }

@@ -100,7 +100,7 @@ class StatusUpdateHandler(http.server.BaseHTTPRequestHandler):
 
 class StatusServer(threading.Thread):
     """A thread to run the HTTP server in the background."""
-    def __init__(self, port=8000):
+    def __init__(self, port=8889):
         super().__init__(daemon=True)
         self.port = port
         self.httpd = None

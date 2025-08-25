@@ -40,7 +40,7 @@ class IRCTCBot:
             use_gpu = not prefs.get("ocr_cpu", True)
 
             # Create webdriver
-            self.driver = create_webdriver(is_headless=is_headless, use_gpu=use_gpu)
+            self.driver = create_webdriver(self.instance_id, is_headless=is_headless, use_gpu=use_gpu)
             if not self.driver:
                 self._update_status("FAILED: WebDriver creation")
                 return
@@ -182,22 +182,65 @@ class IRCTCBot:
 
     # --- Automation Step Methods ---
     def _perform_login(self):
-        self._update_status("Performing Login")
-        use_gpu = not self.bot_config["preferences"].get("ocr_cpu", True)
+        self._update_status("Navigating to Login Modal")
 
-        self._wait(By.CSS_SELECTOR, selectors.LOGIN_BUTTON_HOME).click()
-        self._wait(By.CSS_SELECTOR, selectors.USERNAME_INPUT).send_keys(self.account["username"])
-        self._wait(By.CSS_SELECTOR, selectors.PASSWORD_INPUT).send_keys(self.account["password"])
+        # Resiliently click the main login button until the modal appears
+        while not self.stop_event.is_set():
+            try:
+                self._wait(By.CSS_SELECTOR, selectors.LOGIN_BUTTON_HOME, timeout=5).click()
+                # Check if the username field is now visible to confirm modal is open
+                self._wait(By.CSS_SELECTOR, selectors.USERNAME_INPUT, timeout=2)
+                self.logger.info("Login modal is open.")
+                break
+            except Exception:
+                self.logger.warning("Could not open login modal, retrying...")
+                time.sleep(1)
 
-        self.logger.info("Solving Captcha...")
-        captcha_src = self._wait(By.CSS_SELECTOR, selectors.CAPTCHA_IMAGE_LOGIN).get_attribute("src")
-        solved_text = solve_captcha(captcha_src, use_gpu=use_gpu, logger=self.logger)
-        if not solved_text: raise Exception("Captcha failed.")
+        # Loop up to 20 times to attempt login
+        for attempt in range(1, 21):
+            if self.stop_event.is_set(): return
 
-        self._wait(By.CSS_SELECTOR, selectors.CAPTCHA_INPUT_LOGIN).send_keys(solved_text)
-        self._wait(By.CSS_SELECTOR, selectors.SIGN_IN_BUTTON_MODAL).click()
-        self._wait(By.CSS_SELECTOR, selectors.LOGOUT_BUTTON) # Wait for logout button to appear to confirm login
-        self.logger.info("Login Successful.")
+            self._update_status(f"Login Attempt {attempt}/20")
+            try:
+                # Fill username and password
+                user_input = self._wait(By.CSS_SELECTOR, selectors.USERNAME_INPUT, timeout=5)
+                user_input.clear()
+                user_input.send_keys(self.account["username"])
+
+                pass_input = self._wait(By.CSS_SELECTOR, selectors.PASSWORD_INPUT)
+                pass_input.clear()
+                pass_input.send_keys(self.account["password"])
+
+                # Solve and fill captcha
+                use_gpu = not self.bot_config["preferences"].get("ocr_cpu", True)
+                self._update_status(f"Attempt {attempt}: Solving Captcha...")
+                captcha_src = self._wait(By.CSS_SELECTOR, selectors.CAPTCHA_IMAGE_LOGIN).get_attribute("src")
+                solved_text = solve_captcha(captcha_src, use_gpu=use_gpu, logger=self.logger)
+
+                if not solved_text:
+                    self.logger.warning(f"Attempt {attempt}: Captcha solving failed. Retrying.")
+                    self._wait(By.CSS_SELECTOR, selectors.CAPTCHA_REFRESH_BUTTON).click()
+                    time.sleep(1)
+                    continue
+
+                self._wait(By.CSS_SELECTOR, selectors.CAPTCHA_INPUT_LOGIN).send_keys(solved_text)
+                self._wait(By.CSS_SELECTOR, selectors.SIGN_IN_BUTTON_MODAL).click()
+
+                # Check for successful login by looking for the logout button
+                self._wait(By.CSS_SELECTOR, selectors.LOGOUT_BUTTON, timeout=5)
+                self._update_status("Login Successful")
+                self.logger.info("Login Successful.")
+                return # Exit the method on success
+
+            except Exception as e:
+                self.logger.warning(f"Login attempt {attempt} failed: {e}. Retrying...")
+                # Check if we are still in the modal, if not, break to outer state machine
+                if not self._is_visible(By.CSS_SELECTOR, selectors.USERNAME_INPUT, timeout=1):
+                    self.logger.error("No longer on login modal. Breaking login loop.")
+                    break
+                time.sleep(1)
+
+        raise Exception("Failed to login after 20 attempts.")
 
     def _fill_journey_and_find_trains(self):
         self._update_status("Filling Journey Details")
