@@ -3,6 +3,7 @@ import os
 import re
 import requests
 import json
+import random
 import threading
 from datetime import datetime
 
@@ -158,6 +159,12 @@ class IRCTCBot:
         if self._is_visible(By.XPATH, selectors.PAYMENT_METHOD_UPI_RADIO_XPATH): return "PAYMENT_PAGE"
         return "UNKNOWN"
 
+    def _human_type(self, element, text: str):
+        """Types a string into an element character by character with random delays."""
+        for char in text:
+            element.send_keys(char)
+            time.sleep(random.uniform(0.05, 0.15))
+
     def _popup_killer_loop(self):
         """A daemon thread loop to continuously close popups."""
         self.logger.info("Popup killer thread started.")
@@ -196,21 +203,25 @@ class IRCTCBot:
                 self.logger.warning("Could not open login modal, retrying...")
                 time.sleep(1)
 
-        # Loop up to 20 times to attempt login
+        # Fill username and password once before the loop
+        try:
+            user_input = self._wait(By.CSS_SELECTOR, selectors.USERNAME_INPUT, timeout=5)
+            user_input.clear()
+            self._human_type(user_input, self.account["username"])
+
+            pass_input = self._wait(By.CSS_SELECTOR, selectors.PASSWORD_INPUT)
+            pass_input.clear()
+            self._human_type(pass_input, self.account["password"])
+        except Exception as e:
+            self.logger.error(f"Failed to fill username/password fields: {e}")
+            raise # Re-raise exception as this is a fatal error for login
+
+        # Loop up to 20 times to attempt login by only re-solving captcha
         for attempt in range(1, 21):
             if self.stop_event.is_set(): return
 
             self._update_status(f"Login Attempt {attempt}/20")
             try:
-                # Fill username and password
-                user_input = self._wait(By.CSS_SELECTOR, selectors.USERNAME_INPUT, timeout=5)
-                user_input.clear()
-                user_input.send_keys(self.account["username"])
-
-                pass_input = self._wait(By.CSS_SELECTOR, selectors.PASSWORD_INPUT)
-                pass_input.clear()
-                pass_input.send_keys(self.account["password"])
-
                 # Solve and fill captcha
                 use_gpu = not self.bot_config["preferences"].get("ocr_cpu", True)
                 self._update_status(f"Attempt {attempt}: Solving Captcha...")
@@ -223,7 +234,9 @@ class IRCTCBot:
                     time.sleep(1)
                     continue
 
-                self._wait(By.CSS_SELECTOR, selectors.CAPTCHA_INPUT_LOGIN).send_keys(solved_text)
+                captcha_input = self._wait(By.CSS_SELECTOR, selectors.CAPTCHA_INPUT_LOGIN)
+                self._human_type(captcha_input, solved_text)
+
                 self._wait(By.CSS_SELECTOR, selectors.SIGN_IN_BUTTON_MODAL).click()
 
                 # Check for successful login by looking for the logout button
@@ -261,7 +274,6 @@ class IRCTCBot:
         date_str_dmy = datetime.strptime(train_details['date'], '%d%m%Y').strftime('%d/%m/%Y')
         self.driver.execute_script(f"arguments[0].value = '{date_str_dmy}';", date_input)
         self.driver.find_element(By.CSS_SELECTOR, "body").click() # Click away to close calendar
-        time.sleep(0.5)
 
         self._wait(By.CSS_SELECTOR, selectors.FIND_TRAINS_BUTTON).click()
 
@@ -272,7 +284,6 @@ class IRCTCBot:
         # Select Quota
         quota_id = train_details['quota'].lower() # e.g., 'tatkal', 'general'
         self._wait(By.CSS_SELECTOR, f"p-radiobutton[id='{quota_id}']").click()
-        time.sleep(1.5) # Wait for list to refresh
 
         # Extract class code from "AC 3 Tier (3A)" -> "3A"
         class_match = re.search(r'\((\S+)\)', train_details['class'])
@@ -284,8 +295,9 @@ class IRCTCBot:
             if train_details['train_no'] in train_element.text:
                 self.logger.info(f"Found train {train_details['train_no']}. Selecting class {class_code}.")
                 class_sel = selectors.CLASS_SELECTOR_TEMPLATE.format(class_code=class_code)
-                train_element.find_element(By.CSS_SELECTOR, class_sel).click()
-                time.sleep(0.5)
+                # We need to wait for the train list to refresh after changing quota
+                WebDriverWait(train_element, 10).until(EC.element_to_be_clickable((By.CSS_SELECTOR, class_sel))).click()
+
                 train_element.find_element(By.CSS_SELECTOR, selectors.BOOK_NOW_BUTTON).click()
                 return
         raise Exception(f"Train {train_details['train_no']} not found in the list.")
