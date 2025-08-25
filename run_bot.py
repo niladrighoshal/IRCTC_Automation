@@ -3,7 +3,7 @@ import sys
 import glob
 import json
 from src.core.bot_runner import BotRunner
-from src.utils.excel_logger import ExcelLogger
+from src.utils.status_server import StatusServer
 
 # --- Constants ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,16 +25,23 @@ def find_latest_booking_file():
 
 def main():
     """
-    Main function to find the latest booking config and run the bot.
+    Main function to start the status server, find the latest booking
+    config, and run the bot.
     """
     print("--- IRCTC Bot Backend ---")
 
     # Add src to python path to allow for absolute imports
     sys.path.insert(0, os.path.join(BASE_DIR, 'src'))
 
+    # Start the status server in a background thread
+    server = StatusServer()
+    server.start()
+    server.server_started.wait(timeout=5) # Wait for server to be ready
+
     config_file = find_latest_booking_file()
 
     if not config_file:
+        server.stop()
         sys.exit(1)
 
     print(f"[*] Using configuration from: {os.path.basename(config_file)}")
@@ -42,25 +49,15 @@ def main():
     with open(config_file, 'r', encoding='utf-8') as f:
         config = json.load(f)
 
-    excel_logger = None
     try:
-        # Instantiate the logger
-        excel_logger = ExcelLogger()
-
-        # Pass the config and the logger to the runner
-        runner = BotRunner(config, excel_logger, config_file)
+        runner = BotRunner(config)
         runner.start()
-
         print("[*] Bot run finished.")
-    except NameError:
-        print("\n[FATAL] This script requires the `BotRunner` class in `src/core/bot_runner.py`.")
-        print("This will be implemented in the next step of the plan.")
-        sys.exit(1)
     except Exception as e:
         print(f"\n[FATAL] An unexpected error occurred: {e}")
         sys.exit(1)
     finally:
-        # The new ExcelLogger handles its own resources, so no close call is needed.
+        server.stop()
         print("[*] Script finished.")
 
 if __name__ == "__main__":

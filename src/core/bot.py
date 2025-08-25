@@ -2,6 +2,7 @@ import time
 import os
 import re
 import requests
+import json
 import threading
 from datetime import datetime
 
@@ -16,11 +17,9 @@ from src.core.ocr_solver import solve_captcha
 import src.core.selectors as selectors
 
 class IRCTCBot:
-    def __init__(self, bot_config, excel_logger, config_filename, instance_id=0):
+    def __init__(self, bot_config, instance_id=0):
         self.bot_config = bot_config
         self.account = bot_config.get('account', {})
-        self.excel_logger = excel_logger
-        self.config_filename = config_filename
         self.instance_id = instance_id
         self.logger = setup_logger(self.instance_id)
         self.driver = None
@@ -31,9 +30,6 @@ class IRCTCBot:
     # --- Core Methods ---
     def run(self):
         """Main entry point for the bot thread."""
-        # This is the first action, setting up the Excel column with all static info.
-        self.excel_logger.setup_column(self.instance_id, self.bot_config, self.config_filename)
-
         self._update_status("STARTING")
         popup_thread = None
         try:
@@ -136,9 +132,13 @@ class IRCTCBot:
     # --- Helper & Utility Methods ---
     def _update_status(self, new_status):
         self.status = new_status
-        # Log to both the console logger and the Excel logger
         self.logger.info(f"Status: {self.status}")
-        self.excel_logger.log(self.instance_id, new_status)
+        try:
+            # Send status update to the local dashboard server
+            payload = {'instance_id': self.instance_id, 'status': new_status}
+            requests.post("http://localhost:8000/update", json=payload, timeout=1)
+        except requests.exceptions.RequestException:
+            self.logger.warning("Could not send status update to dashboard server.")
 
     def _wait(self, by, value, timeout=10):
         return WebDriverWait(self.driver, timeout).until(EC.presence_of_element_located((by, value)))

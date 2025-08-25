@@ -1,5 +1,5 @@
 import streamlit as st
-import json, os, re, sys, subprocess
+import json, os, re, sys, subprocess, webbrowser
 from datetime import date, datetime, timedelta
 
 # Selenium imports are moved into the functions that use them to speed up UI loading.
@@ -126,26 +126,27 @@ with st.sidebar:
 
 # ---------- Sidebar: User Credentials (multi-browser) ----------
 st.sidebar.subheader("User Credentials")
-saved_logins = []
-if os.path.exists(LOGIN_FILE):
-    try:
-        with open(LOGIN_FILE, "r", encoding="utf-8") as fh:
-            saved_logins = json.load(fh)
-    except Exception:
-        saved_logins = []
 
-# ensure session_state.logins length matches browser_count
-if "logins" not in st.session_state:
-    st.session_state.logins = [{} for _ in range(browser_count)]
-elif len(st.session_state.logins) < browser_count:
-    st.session_state.logins.extend({} for _ in range(browser_count - len(st.session_state.logins)))
-elif len(st.session_state.logins) > browser_count:
+# This initialization block now runs ONCE per session, loading credentials reliably.
+if 'logins_initialized' not in st.session_state:
+    st.session_state.logins = []
+    if os.path.exists(LOGIN_FILE):
+        try:
+            with open(LOGIN_FILE, "r", encoding="utf-8") as fh:
+                st.session_state.logins = json.load(fh)
+        except Exception as e:
+            st.warning(f"Could not load credentials: {e}")
+    st.session_state.logins_initialized = True
+
+# This block runs on every script rerun to adjust the number of login fields
+# based on the browser_count slider, without losing existing data.
+current_login_count = len(st.session_state.get('logins', []))
+if current_login_count < browser_count:
+    st.session_state.logins.extend([{} for _ in range(browser_count - current_login_count)])
+elif current_login_count > browser_count:
     st.session_state.logins = st.session_state.logins[:browser_count]
 
-for i in range(browser_count):
-    if i < len(saved_logins) and not st.session_state.logins[i]:
-        st.session_state.logins[i] = saved_logins[i]
-
+# Display the expanders for each login.
 for i in range(browser_count):
     with st.sidebar.expander(f"Browser {i+1} Login", expanded=False):
         u = st.text_input("Username", value=st.session_state.logins[i].get("username",""), key=f"uname{i}")
@@ -176,9 +177,16 @@ def cb_fetch_train_name():
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
 
+    st.session_state["train_name"] = "" # Reset train name
     tn = st.session_state.get("train_no_input","")
-    if tn and tn.isdigit() and st.session_state.get("driver"):
+
+    if not st.session_state.get("driver"):
+        st.error("Browser driver not initialized. Cannot fetch train name.")
+        return
+
+    if tn and tn.isdigit():
         try:
+            st.info("Fetching train name...")
             url = f"https://www.railyatri.in/time-table/{tn}"
             d = st.session_state.driver
             d.get(url)
@@ -188,8 +196,9 @@ def cb_fetch_train_name():
             text = heading.text.strip()
             m = re.match(r"(.+?\(\d+\))", text)
             st.session_state["train_name"] = (m.group(1).strip() if m else text.replace("Train Time Table","").strip())
-        except Exception:
-            st.session_state["train_name"] = "Error fetching train name."
+        except Exception as e:
+            st.session_state["train_name"] = "Could not fetch name."
+            st.error(f"Error fetching train name for {tn}: {e}")
 
 # ---------- Helper callbacks ----------
 def cb_titlecase(idx_field):
@@ -490,8 +499,16 @@ if st.sidebar.button("Start BOT", use_container_width=True):
         try:
             bot_script_path = os.path.join(BASE_DIR, 'run_bot.py')
             # Use sys.executable to ensure it runs with the same python interpreter
-            subprocess.Popen([sys.executable, bot_script_path])
-            st.sidebar.success("✅ Bot started in the background! Monitor 'irctc_booking_log.xlsx' for progress.")
+            # Redirect stdout/stderr to a log file for debugging the launch process
+            with open("bot_launcher.log", "w") as log_file:
+                subprocess.Popen([sys.executable, bot_script_path], stdout=log_file, stderr=subprocess.STDOUT)
+
+            # Open the dashboard in a new browser tab
+            dashboard_url = "http://localhost:8000"
+            webbrowser.open_new_tab(dashboard_url)
+            st.sidebar.success(f"✅ Bot started! Opening dashboard...")
+            st.sidebar.markdown(f"If it doesn't open automatically, [click here to view the dashboard]({dashboard_url}).")
+
         except FileNotFoundError:
             st.sidebar.error("Error: 'run_bot.py' not found. Cannot start the bot.")
         except Exception as e:
