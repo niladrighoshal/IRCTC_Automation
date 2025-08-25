@@ -504,7 +504,7 @@ if st.sidebar.button("Start BOT", use_container_width=True):
                 subprocess.Popen([sys.executable, bot_script_path], stdout=log_file, stderr=subprocess.STDOUT)
 
             # Open the dashboard in a new browser tab
-            dashboard_url = "http://localhost:8000"
+            dashboard_url = "http://localhost:8889"
             webbrowser.open_new_tab(dashboard_url)
             st.sidebar.success(f"✅ Bot started! Opening dashboard...")
             st.sidebar.markdown(f"If it doesn't open automatically, [click here to view the dashboard]({dashboard_url}).")
