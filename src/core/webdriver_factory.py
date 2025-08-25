@@ -33,14 +33,13 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
     options.add_argument("--disable-notifications")
     options.add_argument("--disable-infobars")
     # --- Deep Stealth Options ---
-    # These are critical for avoiding detection.
     options.add_argument("--no-first-run") # Suppress the "Welcome to Brave" screen
-    options.add_argument("--disable-default-apps") # Disables installation of default apps on first run
     options.add_argument('--disable-blink-features=AutomationControlled') # The classic
 
-    # Re-enable these critical experimental options for maximum stealth
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
+    # The following experimental options were found to be unstable and are disabled
+    # to prevent the browser from crashing on launch.
+    # options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    # options.add_experimental_option('useAutomationExtension', False)
 
     prefs = {
         "credentials_enable_service": False,
@@ -79,13 +78,39 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
             print("[WebDriverFactory] Chromium not found at specified path. Falling back to default.")
 
     try:
+        driver = None
         if browser_path:
             print(f"[WebDriverFactory] Using browser executable: {browser_path}")
-            return uc.Chrome(browser_executable_path=browser_path, options=options)
+            driver = uc.Chrome(browser_executable_path=browser_path, options=options)
         else:
-            # Fallback to default behavior if no specific path is found
             print("[WebDriverFactory] Using default browser executable path.")
-            return uc.Chrome(options=options)
+            driver = uc.Chrome(options=options)
+
+        # --- Post-launch popup handling ---
+        # After launch, Brave may show a "private analytics" popup. We need to dismiss it.
+        print("[WebDriverFactory] Checking for initial Brave popups...")
+        from selenium.webdriver.common.by import By
+        import time
+
+        end_time = time.time() + 10 # Check for 10 seconds
+        popup_found_and_clicked = False
+        while time.time() < end_time and not popup_found_and_clicked:
+            try:
+                # This selector is specific to the "Got it" button on the analytics popup
+                got_it_button = driver.find_element(By.XPATH, "//button[normalize-space()='Got it']")
+                if got_it_button.is_displayed() and got_it_button.is_enabled():
+                    print("[WebDriverFactory] Found 'Got it' popup. Clicking to dismiss...")
+                    got_it_button.click()
+                    popup_found_and_clicked = True
+                    print("[WebDriverFactory] 'Got it' popup dismissed.")
+            except Exception:
+                # Button not found, which is the normal case after the first run.
+                time.sleep(0.5)
+
+        if not popup_found_and_clicked:
+            print("[WebDriverFactory] No initial popups found, or could not dismiss in time.")
+
+        return driver
 
     except Exception as e:
         print(f"Error creating undetected WebDriver: {e}")
