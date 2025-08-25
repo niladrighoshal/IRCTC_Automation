@@ -123,6 +123,7 @@ class IRCTCBot:
                     break # Exit loop on success
                 else:
                     self.logger.warning("In UNKNOWN state, please check browser.")
+                    self.driver.save_screenshot(f"unknown_state_{self.instance_id}_{datetime.now().strftime('%H%M%S')}.png")
                     time.sleep(5)
                 time.sleep(1) # Small delay between state checks
             except Exception as e:
@@ -170,28 +171,33 @@ class IRCTCBot:
         """A daemon thread loop to continuously close popups."""
         self.logger.info("Popup killer thread started.")
         while not self.stop_event.is_set():
-            try:
-                # Use the user-provided selector for the Disha banner
-                disha_close_button = self.driver.find_element(By.CSS_SELECTOR, "img#disha-banner-close")
-                disha_close_button.click()
-                self.logger.info("Closed Disha banner.")
-            except:
-                pass # Element not found, which is normal
-
-            try:
+            popups = [
+                # Disha banner
+                (By.CSS_SELECTOR, "img#disha-banner-close"),
                 # Aadhar popup
-                ok_button = self.driver.find_element(By.CSS_SELECTOR, "button.btn-primary[aria-label*='Aadhaar authenticated users']")
-                ok_button.click()
-                self.logger.info("Closed Aadhaar popup.")
-            except:
-                pass
+                (By.CSS_SELECTOR, "button.btn-primary[aria-label*='Aadhaar authenticated users']"),
+                # Generic cookie / consent buttons
+                (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept')]"),
+                (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'ok')]"),
+                (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'got it')]"),
+            ]
+            for by, selector in popups:
+                try:
+                    # Use find_elements to avoid exceptions when not found
+                    elements = self.driver.find_elements(by, selector)
+                    for element in elements:
+                        if element.is_displayed() and element.is_enabled():
+                            element.click()
+                            self.logger.info(f"Clicked a potential popup with selector: {selector}")
+                            time.sleep(0.5) # Small pause after a click
+                except Exception:
+                    continue # Ignore errors and continue to the next popup type
             time.sleep(1) # Check every second
         self.logger.info("Popup killer thread stopped.")
 
     # --- Automation Step Methods ---
     def _perform_login(self):
         self._update_status("Navigating to Login Modal")
-        self.driver.save_screenshot(f"login_start_{self.instance_id}.png")
 
         # Resiliently click the main login button until the modal appears
         while not self.stop_event.is_set():
@@ -207,7 +213,6 @@ class IRCTCBot:
                 break
             except Exception as e:
                 self.logger.warning(f"Could not open login modal, retrying... Error: {e}")
-                self.driver.save_screenshot(f"login_fail_click_{self.instance_id}.png")
                 time.sleep(1)
 
         # Fill username and password once before the loop
@@ -223,11 +228,11 @@ class IRCTCBot:
             self.logger.error(f"Failed to fill username/password fields: {e}")
             raise # Re-raise exception as this is a fatal error for login
 
-        # Loop up to 3 times for smoke testing
-        for attempt in range(1, 4):
+        # Loop up to 20 times to attempt login by only re-solving captcha
+        for attempt in range(1, 21):
             if self.stop_event.is_set(): return
 
-            self._update_status(f"Login Attempt {attempt}/3")
+            self._update_status(f"Login Attempt {attempt}/20")
             try:
                 # Solve and fill captcha
                 use_gpu = not self.bot_config["preferences"].get("ocr_cpu", True)
