@@ -36,6 +36,7 @@ class IRCTCBot:
         # State management
         self.state_lock = threading.Lock()
         self._current_state = BotState.INITIALIZED
+        self.last_processed_state = None # To prevent re-processing the same state
         self.action_log = deque(maxlen=30) # For UI display
         self.internal_state_data = {} # For multi-step operations like login
 
@@ -143,7 +144,10 @@ class IRCTCBot:
         self.logger.info("Supervisor thread stopped.")
 
     def _worker_loop(self):
-        """Executes actions based on the current state."""
+        """
+        Executes actions based on state changes detected by the Supervisor.
+        This loop now acts as a "state-change reactor" to avoid getting stuck.
+        """
         self.logger.info("Worker thread started.")
 
         state_handlers = {
@@ -158,24 +162,31 @@ class IRCTCBot:
         }
 
         while not self.stop_event.is_set():
-            state = self.current_state
-            # Worker should not act if supervisor is still figuring things out
-            if state in [BotState.INITIALIZED, BotState.STARTING, BotState.IDLE]:
-                time.sleep(1)
-                continue
+            current_state = self.current_state
 
-            handler = state_handlers.get(state)
+            # Act only if the state has changed since the last time we acted
+            if current_state != self.last_processed_state:
+                handler = state_handlers.get(current_state)
 
-            if handler:
-                try:
-                    handler()
-                except Exception as e:
-                    self.logger.error(f"Error in worker handling state {state.name}: {e}", exc_info=True)
-                    self._log_action(f"ERROR in {state.name}: {e}", is_error=True)
-                    self.current_state = BotState.RECOVERING
-                    time.sleep(3)
+                if handler:
+                    try:
+                        self.logger.info(f"Worker acting on new state: {current_state.name}")
+                        handler()
+                        # Mark this state as processed *after* the handler runs
+                        self.last_processed_state = current_state
+                    except Exception as e:
+                        self.logger.error(f"Error in worker handling state {current_state.name}: {e}", exc_info=True)
+                        self._log_action(f"ERROR in {current_state.name}: {e}", is_error=True)
+                        # After an error, clear the processed state so we can re-evaluate
+                        self.last_processed_state = None
+                        self.current_state = BotState.RECOVERING
+                        time.sleep(3) # Wait before supervisor re-evaluates
+                else:
+                    # If there's no handler for a state, we still mark it as processed
+                    # to avoid getting stuck in a loop on an unhandled state.
+                    self.last_processed_state = current_state
 
-            time.sleep(0.5)
+            time.sleep(0.2) # Small delay to keep CPU usage low
         self.logger.info("Worker thread stopped.")
 
     # --- Granular State Handlers ---
@@ -366,13 +377,24 @@ class IRCTCBot:
         self._log_action(f"Finished typing.")
 
     def _close_popups(self):
-        """Finds and closes known popups. Called by the supervisor."""
+        """
+        Finds and closes known popups. Called by the supervisor.
+        This has been made less aggressive to avoid clicking incorrect elements.
+        """
+        # More specific popups should be prioritized. Generic ones are risky.
         popups = [
-            (By.CSS_SELECTOR, "img#disha-banner-close"),
+            # This is a known, specific popup for Aadhar users. It's safe to click.
             (By.CSS_SELECTOR, "button.btn-primary[aria-label*='Aadhaar authenticated users']"),
-            (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept')]"),
-            (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'ok')]"),
-            (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'got it')]"),
+
+            # The following popups are temporarily disabled as per user feedback to prevent
+            # the bot from clicking the "AskDISHA" button by mistake.
+
+            # (By.CSS_SELECTOR, "img#disha-banner-close"), # Disabled: Disha banner
+
+            # The generic buttons below are too risky as they can match unintended elements.
+            # (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept')]"),
+            # (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'ok')]"),
+            # (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'got it')]"),
         ]
         for by, selector in popups:
             try:
@@ -381,5 +403,10 @@ class IRCTCBot:
                     if element.is_displayed() and element.is_enabled():
                         self._log_action(f"Closing popup: {selector}")
                         element.click()
+                        time.sleep(0.5) # Pause after a click to let UI settle
+            except StaleElementReferenceException:
+                # This is expected if the popup closes itself after we find it
+                continue
             except Exception:
+                # Ignore other potential errors during popup closing
                 continue
