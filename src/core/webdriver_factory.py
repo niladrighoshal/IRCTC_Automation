@@ -48,12 +48,18 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
     if sys.platform == "win32":
         # User-provided paths for Windows and Brave
         brave_path = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
-        # Create a unique profile path for each bot instance to ensure separate windows
-        base_profile_path = r"G:\Project\IRCTC_Tatkal\Automation\BraveProfile"
+        # Create a unique, persistent profile for each bot instance to avoid detection
+        # and ensure separate browser windows.
+        base_profile_path = os.path.join(os.getcwd(), "brave_profiles")
         profile_path = os.path.join(base_profile_path, f"bot_{instance_id}")
+
+        # Ensure the directory for the profile exists before launching
+        os.makedirs(profile_path, exist_ok=True)
+        print(f"[WebDriverFactory] Using profile path: {profile_path}")
 
         if os.path.exists(brave_path):
             browser_path = brave_path
+            # This is the critical argument for using a dedicated profile
             options.add_argument(f'--user-data-dir={profile_path}')
         else:
             print("[WebDriverFactory] Brave browser not found at specified path. Falling back to default.")
