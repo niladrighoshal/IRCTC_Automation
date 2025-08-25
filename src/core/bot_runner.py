@@ -7,18 +7,14 @@ class BotRunner:
     Manages the creation and execution of multiple IRCTCBot instances,
     each in its own thread.
     """
-    def __init__(self, config, excel_logger, config_filename):
+    def __init__(self, config):
         """
-        Initializes the BotRunner with the booking configuration and logger.
+        Initializes the BotRunner with the booking configuration.
 
         Args:
             config (dict): The configuration dictionary loaded from the JSON file.
-            excel_logger (ExcelLogger): An instance of the Excel logger.
-            config_filename (str): The filename of the config being used.
         """
         self.config = config
-        self.excel_logger = excel_logger
-        self.config_filename = config_filename
         self.threads = []
 
     def _run_bot_instance(self, credentials, instance_id):
@@ -27,7 +23,7 @@ class BotRunner:
         """
         print(f"[BotRunner] Starting bot instance {instance_id} for user '{credentials.get('username', 'N/A')}'.")
         try:
-            # Pass the logger and other details down to the bot instance
+            # The new bot just needs its own config and instance id
             bot_config = {
                 'account': credentials,
                 'train': self.config.get('train', {}),
@@ -36,8 +32,6 @@ class BotRunner:
             }
             bot = IRCTCBot(
                 bot_config=bot_config,
-                excel_logger=self.excel_logger,
-                config_filename=self.config_filename,
                 instance_id=instance_id
             )
             bot.run()
