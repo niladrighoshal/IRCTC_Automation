@@ -42,8 +42,12 @@ def _preprocess_image(pil_img):
 def solve_captcha(image_source, use_gpu=True, logger=None):
     start_time = time.time()
     try:
+        # If OCR model is not ready, initialize it with the provided setting.
+        # This ensures the model is loaded only once with the correct device.
         if not ocr_ready:
-            if logger: logger.info("Waiting for OCR model to load...")
+            if logger: logger.info(f"Initializing OCR model (GPU: {use_gpu})...")
+            initialize_ocr_model(use_gpu=use_gpu)
+            # Wait for the model to be ready after initialization
             while not ocr_ready: time.sleep(0.2)
 
         img = _url_to_image(image_source, logger)

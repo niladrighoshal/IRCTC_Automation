@@ -1,0 +1,5 @@
+2025-08-24 23:37:04 - [Bot 1] - INFO - Bot for user 'testuser1' initialized.
+2025-08-24 23:37:04 - [Bot 1] - INFO - Status: STARTING
+2025-08-24 23:37:08 - [Bot 1] - INFO - Status: FAILED: WebDriver creation
+2025-08-24 23:37:08 - [Bot 1] - INFO - Bot run finished.
+2025-08-24 23:37:08 - [Bot 1] - INFO - Status: FINISHED

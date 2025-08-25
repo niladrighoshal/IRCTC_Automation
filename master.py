@@ -9,10 +9,10 @@ def main():
     print("--- IRCTC Tatkal Bot Launcher ---")
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    main_script_path = os.path.join(script_dir, "main.py")
+    main_script_path = os.path.join(script_dir, "src", "ui", "app.py")
 
     if not os.path.exists(main_script_path):
-        print(f"Error: 'main.py' not found at '{main_script_path}'")
+        print(f"Error: 'src/ui/app.py' not found at '{main_script_path}'")
         sys.exit(1)
 
     command = ["streamlit", "run", main_script_path]
