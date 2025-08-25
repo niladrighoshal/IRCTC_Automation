@@ -29,6 +29,12 @@
   "contact": {
     "phone": "9635311895"
   },
+  "logins": [
+    {
+        "username": "Niladrighoshal",
+        "password": "Niladrigh@2"
+    }
+  ],
   "preferences": {
     "auto_upgrade": true,
     "confirm_only": true,

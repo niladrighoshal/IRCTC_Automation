@@ -1,6 +1,14 @@
 import streamlit as st
-import json, os, re, sys, subprocess, webbrowser
+import json
+import os
+import re
+import sys
+import subprocess
+import webbrowser
+import pandas as pd
+import glob
 from datetime import date, datetime, timedelta
+from streamlit_autorefresh import st_autorefresh
 
 # Selenium imports are moved into the functions that use them to speed up UI loading.
 
@@ -525,5 +533,43 @@ if st.sidebar.button("Start BOT", use_container_width=True):
         except Exception as e:
             st.sidebar.error(f"An error occurred while starting the bot: {e}")
 
+# ---------- Live Status Dashboard ----------
+st.markdown("---")
+st.subheader("Live Bot Status")
+
+# Auto-refresh the page every 3 seconds
+st_autorefresh(interval=3000, limit=None, key="dashboard_refresh")
+
+def display_status_dashboard():
+    log_files = glob.glob(os.path.join('logs', '*_status.json'))
+
+    if not log_files:
+        st.info("No active bots found. Click 'Start BOT' to begin.")
+        return
+
+    all_statuses = []
+    for f in sorted(log_files):
+        try:
+            instance_id = os.path.basename(f).split('_')[1]
+            with open(f, 'r') as fh:
+                data = json.load(fh)
+                all_statuses.append({
+                    "Browser": f"Instance {instance_id}",
+                    "Last Update": data.get('timestamp', ''),
+                    "Status": data.get('status', 'N/A')
+                })
+        except (IOError, json.JSONDecodeError, IndexError):
+            # Handle cases where the file is being written to or is corrupted
+            continue
+
+    if all_statuses:
+        df = pd.DataFrame(all_statuses)
+        df = df.set_index("Browser")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("Waiting for first status update from bots...")
+
+display_status_dashboard()
+
 # ---------- Footer ----------
-st.markdown("<p style='color: navy; font-weight:bold'>Powered by Niladri Ghoshal</p>", unsafe_allow_html=True)
+st.markdown("<hr><p style='text-align:center; color: navy;'>Powered by Niladri Ghoshal</p>", unsafe_allow_html=True)

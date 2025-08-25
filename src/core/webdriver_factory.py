@@ -32,8 +32,10 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
     # --- Options to disable browser popups and infobars ---
     options.add_argument("--disable-notifications")
     options.add_argument("--disable-infobars")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
+    # The 'excludeSwitches' and 'useAutomationExtension' options can be unstable
+    # with some chromedriver versions, so they are disabled for max compatibility.
+    # options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    # options.add_experimental_option('useAutomationExtension', False)
 
     prefs = {
         "credentials_enable_service": False,

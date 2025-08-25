@@ -3,7 +3,6 @@ import sys
 import glob
 import json
 from src.core.bot_runner import BotRunner
-from src.utils.status_server import StatusServer
 
 # --- Constants ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,23 +24,16 @@ def find_latest_booking_file():
 
 def main():
     """
-    Main function to start the status server, find the latest booking
-    config, and run the bot.
+    Main function to find the latest booking config and run the bot.
     """
     print("--- IRCTC Bot Backend ---")
 
     # Add src to python path to allow for absolute imports
     sys.path.insert(0, os.path.join(BASE_DIR, 'src'))
 
-    # Start the status server in a background thread
-    server = StatusServer()
-    server.start()
-    server.server_started.wait(timeout=5) # Wait for server to be ready
-
     config_file = find_latest_booking_file()
 
     if not config_file:
-        server.stop()
         sys.exit(1)
 
     print(f"[*] Using configuration from: {os.path.basename(config_file)}")
@@ -57,7 +49,6 @@ def main():
         print(f"\n[FATAL] An unexpected error occurred: {e}")
         sys.exit(1)
     finally:
-        server.stop()
         print("[*] Script finished.")
 
 if __name__ == "__main__":
