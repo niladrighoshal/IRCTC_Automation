@@ -1,7 +1,6 @@
 import time
 import os
 import re
-import requests
 import json
 import random
 import threading
@@ -135,11 +134,13 @@ class IRCTCBot:
         self.status = new_status
         self.logger.info(f"Status: {self.status}")
         try:
-            # Send status update to the local dashboard server
-            payload = {'instance_id': self.instance_id, 'status': new_status}
-            requests.post("http://localhost:8000/update", json=payload, timeout=1)
-        except requests.exceptions.RequestException:
-            self.logger.warning("Could not send status update to dashboard server.")
+            # Write the latest status to a dedicated file for the UI to read
+            status_file = os.path.join('logs', f'bot_{self.instance_id}_status.json')
+            with open(status_file, 'w') as f:
+                payload = {'timestamp': datetime.now().isoformat(), 'status': new_status}
+                json.dump(payload, f)
+        except Exception as e:
+            self.logger.warning(f"Could not write status file: {e}")
 
     def _wait(self, by, value, timeout=10):
         return WebDriverWait(self.driver, timeout).until(EC.presence_of_element_located((by, value)))
@@ -190,6 +191,7 @@ class IRCTCBot:
     # --- Automation Step Methods ---
     def _perform_login(self):
         self._update_status("Navigating to Login Modal")
+        self.driver.save_screenshot(f"login_start_{self.instance_id}.png")
 
         # Resiliently click the main login button until the modal appears
         while not self.stop_event.is_set():
@@ -205,6 +207,7 @@ class IRCTCBot:
                 break
             except Exception as e:
                 self.logger.warning(f"Could not open login modal, retrying... Error: {e}")
+                self.driver.save_screenshot(f"login_fail_click_{self.instance_id}.png")
                 time.sleep(1)
 
         # Fill username and password once before the loop
@@ -220,11 +223,11 @@ class IRCTCBot:
             self.logger.error(f"Failed to fill username/password fields: {e}")
             raise # Re-raise exception as this is a fatal error for login
 
-        # Loop up to 20 times to attempt login by only re-solving captcha
-        for attempt in range(1, 21):
+        # Loop up to 3 times for smoke testing
+        for attempt in range(1, 4):
             if self.stop_event.is_set(): return
 
-            self._update_status(f"Login Attempt {attempt}/20")
+            self._update_status(f"Login Attempt {attempt}/3")
             try:
                 # Solve and fill captcha
                 use_gpu = not self.bot_config["preferences"].get("ocr_cpu", True)
