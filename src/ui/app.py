@@ -1,10 +1,8 @@
 import streamlit as st
-import json, os, re
+import json, os, re, sys, subprocess
 from datetime import date, datetime, timedelta
-import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+
+# Selenium imports are moved into the functions that use them to speed up UI loading.
 
 # ---------- Directories ----------
 BASE_DIR = os.getcwd()
@@ -17,6 +15,10 @@ LOGIN_FILE = os.path.join(LOGIN_DIR, "user_credentials.json")
 # ---------- Styling & Branding ----------
 st.markdown("""
 <style>
+.stApp {
+    background: linear-gradient(to bottom, #e0f7fa, #80deea);
+    background-attachment: fixed;
+}
 .stApp header {background-color: navy !important;}
 .stButton>button {background-color: navy; color: white; font-weight:bold;}
 .branding {font-size:28px; color: navy; font-weight:bold;}
@@ -157,6 +159,7 @@ if st.sidebar.button("Save Credentials"):
 
 # ---------- Selenium for train name ----------
 def init_driver():
+    import undetected_chromedriver as uc
     options = uc.ChromeOptions()
     options.add_argument("--headless=new")
     options.add_argument("--disable-blink-features=AutomationControlled")
@@ -169,6 +172,10 @@ if "driver" not in st.session_state:
         st.session_state.driver = None
 
 def cb_fetch_train_name():
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+
     tn = st.session_state.get("train_no_input","")
     if tn and tn.isdigit() and st.session_state.get("driver"):
         try:
@@ -435,15 +442,60 @@ with col_save[2]:
         st.rerun()
 
 # ---------- Start BOT (sidebar) ----------
-if st.sidebar.button("Start BOT"):
+if st.sidebar.button("Start BOT", use_container_width=True):
+    # First, ensure the latest details are saved, so the bot uses the most recent info.
+    # This re-uses the validation and save logic from the main "Save" button.
     required_ok = all([
-        from_station, to_station, st.session_state.get("train_no_input",""), st.session_state.get("train_class_val", "") ,
-        st.session_state.get("quota_val", ""), st.session_state.get("phone_no","") and st.session_state.get("phone_no","").isdigit() and len(st.session_state.get("phone_no",""))==10
+        from_station, to_station, st.session_state.get("train_no_input",""),
+        st.session_state.get("train_class_val", ""), st.session_state.get("quota_val", ""),
+        st.session_state.get("phone_no","") and st.session_state.get("phone_no","").isdigit() and len(st.session_state.get("phone_no",""))==10
     ])
+
     if not required_ok:
-        st.sidebar.error("Fill all required fields with valid values before starting.")
+        st.sidebar.error("Please fill all required (*) fields with valid values before starting the bot.")
     else:
-        st.sidebar.success("Configuration OK. (BOT not started from UI.)")
+        # --- Save the current state to a file ---
+        # This block is similar to the main "Save" button logic
+        booking_data = {
+            "train": {
+                "from_input": st.session_state.get("from_station_display",""), "from_code": from_station,
+                "to_input": st.session_state.get("to_station_display",""), "to_code": to_station,
+                "date": travel_date.strftime("%d%m%Y"), "train_no": st.session_state.get("train_no_input",""),
+                "train_name": st.session_state.get("train_name",""), "class": st.session_state.get("train_class_val", train_class_val),
+                "quota": st.session_state.get("quota_val", quota_val)
+            },
+            "passengers": st.session_state.passengers,
+            "contact": {"phone": st.session_state.get("phone_no","")},
+            "logins": st.session_state.get("logins", []),
+            "preferences": {
+                "auto_upgrade": st.session_state.get("auto_upgrade", True), "confirm_only": st.session_state.get("confirm_only", True),
+                "payment": st.session_state.get("payment_method", payment_method), "upi_id": st.session_state.get("upi_id", ""),
+                "timed": st.session_state.get("timed", timed), "ac": st.session_state.get("ac_toggle", ac_toggle),
+                "sl": st.session_state.get("sl_toggle", sl_toggle), "ocr_cpu": st.session_state.get("ocr_cpu", ocr_cpu),
+                "headless": st.session_state.get("headless", headless), "browser_count": st.session_state.get("browser_count", browser_count)
+            },
+            "saved_at": datetime.now().isoformat(timespec="seconds")
+        }
+        # Always save to a consistent filename for the bot to pick up, overwriting the latest.
+        # The `run_bot.py` script is designed to find the latest file, but saving to a consistent
+        # name like 'latest_run.json' can also be a robust strategy. We'll stick to the
+        # "latest by timestamp" strategy for now.
+        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_booking.json"
+        out_path = os.path.join(SAVE_DIR, filename)
+        with open(out_path, "w", encoding="utf-8") as fh:
+            json.dump(booking_data, fh, indent=2, ensure_ascii=False)
+        st.sidebar.info(f"Saved current settings to {filename}")
+
+        # --- Launch the bot script as a background process ---
+        try:
+            bot_script_path = os.path.join(BASE_DIR, 'run_bot.py')
+            # Use sys.executable to ensure it runs with the same python interpreter
+            subprocess.Popen([sys.executable, bot_script_path])
+            st.sidebar.success("✅ Bot started in the background! Monitor 'irctc_booking_log.xlsx' for progress.")
+        except FileNotFoundError:
+            st.sidebar.error("Error: 'run_bot.py' not found. Cannot start the bot.")
+        except Exception as e:
+            st.sidebar.error(f"An error occurred while starting the bot: {e}")
 
 # ---------- Footer ----------
 st.markdown("<p style='color: navy; font-weight:bold'>Powered by Niladri Ghoshal</p>", unsafe_allow_html=True)
