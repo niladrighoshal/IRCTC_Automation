@@ -127,24 +127,35 @@ with st.sidebar:
 # ---------- Sidebar: User Credentials (multi-browser) ----------
 st.sidebar.subheader("User Credentials")
 
-# This initialization block now runs ONCE per session, loading credentials reliably.
-if 'logins_initialized' not in st.session_state:
-    st.session_state.logins = []
+# This initialization block now runs ONCE per session, loading the full list of credentials.
+if 'saved_logins' not in st.session_state:
+    st.session_state.saved_logins = []
     if os.path.exists(LOGIN_FILE):
         try:
             with open(LOGIN_FILE, "r", encoding="utf-8") as fh:
-                st.session_state.logins = json.load(fh)
+                st.session_state.saved_logins = json.load(fh)
         except Exception as e:
-            st.warning(f"Could not load credentials: {e}")
-    st.session_state.logins_initialized = True
+            st.warning(f"Could not load credentials file: {e}")
 
-# This block runs on every script rerun to adjust the number of login fields
-# based on the browser_count slider, without losing existing data.
-current_login_count = len(st.session_state.get('logins', []))
-if current_login_count < browser_count:
-    st.session_state.logins.extend([{} for _ in range(browser_count - current_login_count)])
-elif current_login_count > browser_count:
-    st.session_state.logins = st.session_state.logins[:browser_count]
+# This block ensures the displayed login fields match the browser count
+# without losing or truncating the underlying data.
+# It populates from the saved list first, then adds empty slots if needed.
+if 'logins' not in st.session_state:
+    st.session_state.logins = []
+
+logins = st.session_state.logins
+saved_logins = st.session_state.saved_logins
+
+# Adjust the list of logins based on the browser count slider
+while len(logins) < browser_count:
+    # If we have a saved login for this new slot, use it. Otherwise, add an empty dict.
+    if len(logins) < len(saved_logins):
+        logins.append(saved_logins[len(logins)])
+    else:
+        logins.append({})
+
+# We only need to display up to the browser_count
+# The full list is preserved in st.session_state.logins if browser_count is reduced.
 
 # Display the expanders for each login.
 for i in range(browser_count):

@@ -1,7 +1,7 @@
 AADHAAR_OK_BUTTON = "button.btn-primary[aria-label*='Aadhaar authenticated users']"
 DISHA_BANNER_CLOSE_BUTTON = "img#disha-banner-close"
 # --- Login Page Selectors ---
-LOGIN_BUTTON_HOME = "a.search_btn.loginText.ng-star-inserted"
+LOGIN_BUTTON_HOME = "//a[contains(text(), 'LOGIN')]"
 USERNAME_INPUT = "input[formcontrolname='userid']"
 PASSWORD_INPUT = "input[formcontrolname='password']"
 CAPTCHA_IMAGE_LOGIN = "img.captcha-img"
