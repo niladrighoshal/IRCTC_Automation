@@ -32,14 +32,20 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
     # --- Options to disable browser popups and infobars ---
     options.add_argument("--disable-notifications")
     options.add_argument("--disable-infobars")
-    # The 'excludeSwitches' and 'useAutomationExtension' options can be unstable
-    # with some chromedriver versions, so they are disabled for max compatibility.
-    # options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    # options.add_experimental_option('useAutomationExtension', False)
+    # --- Deep Stealth Options ---
+    # These are critical for avoiding detection.
+    options.add_argument("--no-first-run") # Suppress the "Welcome to Brave" screen
+    options.add_argument("--disable-default-apps") # Disables installation of default apps on first run
+    options.add_argument('--disable-blink-features=AutomationControlled') # The classic
+
+    # Re-enable these critical experimental options for maximum stealth
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
 
     prefs = {
         "credentials_enable_service": False,
-        "profile.password_manager_enabled": False
+        "profile.password_manager_enabled": False,
+        "profile.default_content_setting_values.notifications": 2 # 1:allow, 2:block
     }
     options.add_experimental_option("prefs", prefs)
 
