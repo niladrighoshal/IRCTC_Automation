@@ -194,13 +194,17 @@ class IRCTCBot:
         # Resiliently click the main login button until the modal appears
         while not self.stop_event.is_set():
             try:
-                self._wait(By.CSS_SELECTOR, selectors.LOGIN_BUTTON_HOME, timeout=5).click()
+                # Wait for the button to be clickable, not just present
+                login_button = WebDriverWait(self.driver, 5).until(
+                    EC.element_to_be_clickable((By.XPATH, selectors.LOGIN_BUTTON_HOME))
+                )
+                login_button.click()
                 # Check if the username field is now visible to confirm modal is open
                 self._wait(By.CSS_SELECTOR, selectors.USERNAME_INPUT, timeout=2)
                 self.logger.info("Login modal is open.")
                 break
-            except Exception:
-                self.logger.warning("Could not open login modal, retrying...")
+            except Exception as e:
+                self.logger.warning(f"Could not open login modal, retrying... Error: {e}")
                 time.sleep(1)
 
         # Fill username and password once before the loop
