@@ -77,15 +77,18 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
 
     try:
         driver = None
+        # The user's browser is v109, so we must force undetected-chromedriver to use the correct driver.
+        kwargs = {'options': options, 'version_main': 109}
+
         if browser_path:
             print(f"[WebDriverFactory] Using browser executable: {browser_path}")
-            driver = uc.Chrome(browser_executable_path=browser_path, options=options)
+            kwargs['browser_executable_path'] = browser_path
         else:
             print("[WebDriverFactory] Using default browser executable path.")
-            driver = uc.Chrome(options=options)
 
-        # The driver is returned immediately. Any post-launch handling, like popups
-        # or profile warming, is now the responsibility of the calling logic (e.g., IRCTCBot).
+        driver = uc.Chrome(**kwargs)
+
+        # The driver is returned immediately. Any post-launch handling is the responsibility of the caller.
         return driver
 
     except Exception as e:
