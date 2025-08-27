@@ -77,8 +77,20 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
 
     try:
         driver = None
-        # The user's browser is v109, so we must force undetected-chromedriver to use the correct driver.
-        kwargs = {'options': options, 'version_main': 109}
+        # The user's browser is v109. We will use a manually downloaded chromedriver
+        # to ensure perfect version compatibility.
+        kwargs = {'options': options}
+
+        # Path to the manually downloaded chromedriver.exe
+        manual_driver_path = r"C:\Users\Niladri_Ghoshal\chromedriver.exe"
+
+        if os.path.exists(manual_driver_path):
+            print(f"[WebDriverFactory] Using manually specified driver: {manual_driver_path}")
+            kwargs['driver_executable_path'] = manual_driver_path
+        else:
+            # Fallback to forcing version if manual driver not found
+            print(f"[WebDriverFactory] Manual driver not found at {manual_driver_path}. Falling back to version_main.")
+            kwargs['version_main'] = 109
 
         if browser_path:
             print(f"[WebDriverFactory] Using browser executable: {browser_path}")
