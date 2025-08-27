@@ -13,29 +13,17 @@ USER_AGENTS = [
 ]
 
 def create_webdriver(instance_id, is_headless=False, use_gpu=True):
+    """
+    Creates a webdriver instance based on the user's proven-working configuration.
+    This uses a single, persistent user profile to appear more human.
+    """
     options = uc.ChromeOptions()
 
-    if is_headless:
-        options.add_argument("--headless=new")
-        options.add_argument("--window-size=1920,1080")
-
-    if not use_gpu:
-        options.add_argument("--disable-gpu")
-
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
+    # --- Base Options from User's Working Code ---
     options.add_argument("--start-maximized")
-    # Select a random user-agent for each browser instance
-    user_agent = random.choice(USER_AGENTS)
-    options.add_argument(f"--user-agent={user_agent}")
-
-    # --- Options based on user's proven working code ---
     options.add_argument("--disable-notifications")
     options.add_argument("--disable-popup-blocking")
     options.add_argument("--disable-extensions")
-
-    # This is a standard stealth flag that is safe to keep.
-    options.add_argument('--disable-blink-features=AutomationControlled')
 
     prefs = {
         "credentials_enable_service": False,
@@ -43,59 +31,24 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
     }
     options.add_experimental_option("prefs", prefs)
 
-    browser_path = None
+    # --- Paths from User's Working Code ---
+    # Using a single, persistent profile is key to avoiding bot detection.
+    brave_path = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
+    profile_path = r"G:\Project\IRCTC_BOT_GOOGLE\BraveProfile"
 
-    if sys.platform == "win32":
-        # User-provided path for Windows and Chromium
-        chromium_path = r"C:\Users\Niladri_Ghoshal\AppData\Local\Chromium\Application\chrome.exe"
+    if os.path.exists(brave_path):
+        options.binary_location = brave_path
+    else:
+        print(f"[WebDriverFactory] WARNING: Brave browser not found at '{brave_path}'. Relying on default.")
 
-        # Create a unique, persistent profile for each bot instance.
-        base_profile_path = os.path.join(os.getcwd(), "chromium_profiles")
-        profile_path = os.path.join(base_profile_path, f"bot_{instance_id}")
-
-        os.makedirs(profile_path, exist_ok=True)
-        print(f"[WebDriverFactory] Using profile path: {profile_path}")
-        options.add_argument(f'--user-data-dir={profile_path}')
-
-        if os.path.exists(chromium_path):
-            browser_path = chromium_path
-        else:
-            print(f"[WebDriverFactory] Chromium not found at specified path: {chromium_path}. Falling back to default.")
-
-    elif sys.platform == "linux":
-        # Path discovered during smoke testing in the cloud environment
-        linux_path = "/home/jules/.cache/ms-playwright/chromium-1181/chrome-linux/chrome"
-        if os.path.exists(linux_path):
-            browser_path = linux_path
-        else:
-            print("[WebDriverFactory] Chromium not found at specified path. Falling back to default.")
+    # Always use the same profile path.
+    options.add_argument(f"--user-data-dir={profile_path}")
+    print(f"[WebDriverFactory] Using persistent profile path: {profile_path}")
 
     try:
-        driver = None
-        # The user's browser is v109. We will use a manually downloaded chromedriver
-        # to ensure perfect version compatibility.
-        kwargs = {'options': options}
-
-        # Path to the manually downloaded chromedriver.exe
-        manual_driver_path = r"C:\Users\Niladri_Ghoshal\chromedriver.exe"
-
-        if os.path.exists(manual_driver_path):
-            print(f"[WebDriverFactory] Using manually specified driver: {manual_driver_path}")
-            kwargs['driver_executable_path'] = manual_driver_path
-        else:
-            # Fallback to forcing version if manual driver not found
-            print(f"[WebDriverFactory] Manual driver not found at {manual_driver_path}. Falling back to version_main.")
-            kwargs['version_main'] = 109
-
-        if browser_path:
-            print(f"[WebDriverFactory] Using browser executable: {browser_path}")
-            kwargs['browser_executable_path'] = browser_path
-        else:
-            print("[WebDriverFactory] Using default browser executable path.")
-
-        driver = uc.Chrome(**kwargs)
-
-        # The driver is returned immediately. Any post-launch handling is the responsibility of the caller.
+        # We force the driver version to 109 to match the user's last known working setup.
+        # This avoids the `session not created` error.
+        driver = uc.Chrome(options=options, version_main=109)
         return driver
 
     except Exception as e:
