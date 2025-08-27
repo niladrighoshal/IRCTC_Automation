@@ -1,11 +1,12 @@
 import undetected_chromedriver as uc
 import sys
 import os
-import random
+from selenium.common.exceptions import WebDriverException
 
 def create_webdriver(instance_id, is_headless=False, use_gpu=True):
     """
-    Creates a webdriver instance with a unique, persistent profile for each bot.
+    Creates a robust webdriver instance that attempts to launch automatically,
+    but falls back to a manual driver if a version mismatch occurs.
     """
     options = uc.ChromeOptions()
 
@@ -14,6 +15,7 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
     options.add_argument("--disable-notifications")
     options.add_argument("--disable-popup-blocking")
     options.add_argument("--disable-extensions")
+    options.add_argument('--disable-blink-features=AutomationControlled')
 
     prefs = {
         "credentials_enable_service": False,
@@ -21,31 +23,54 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
     }
     options.add_experimental_option("prefs", prefs)
 
-    # --- Paths ---
-    # Use the user-provided Chromium path.
-    chromium_path = r"C:\Users\Niladri_Ghoshal\AppData\Local\Chromium\Application\chrome.exe"
+    # --- Profile Path ---
+    profile_dir = os.path.join(os.getcwd(), "chromeprofile", str(instance_id))
+    os.makedirs(profile_dir, exist_ok=True)
+    options.add_argument(f"--user-data-dir={profile_dir}")
+    print(f"[WebDriverFactory] Using profile path: {profile_dir}")
 
-    # --- Scalable, Persistent Profile Creation ---
-    base_profile_dir = os.path.join(os.getcwd(), "chromeprofile")
-    os.makedirs(base_profile_dir, exist_ok=True)
-    profile_path = os.path.join(base_profile_dir, str(instance_id))
-    os.makedirs(profile_path, exist_ok=True)
-
-    # Set the binary location if the executable exists.
-    if os.path.exists(chromium_path):
-        options.binary_location = chromium_path
-    else:
-        print(f"[WebDriverFactory] WARNING: Chromium not found at '{chromium_path}'. Relying on default path.")
-
-    # Always use the dedicated profile path.
-    options.add_argument(f"--user-data-dir={profile_path}")
-    print(f"[WebDriverFactory] Using persistent profile for instance {instance_id}: {profile_path}")
-
+    # --- Primary Automatic Launch Attempt ---
     try:
-        # Force driver version 109 to match the user's browser and prevent crashes.
-        driver = uc.Chrome(options=options, version_main=109)
+        print("[WebDriverFactory] Attempting automatic driver detection...")
+        driver = uc.Chrome(options=options)
+        print("[WebDriverFactory] Automatic driver detection successful.")
         return driver
+    except WebDriverException as e:
+        # Check if the error is the specific version mismatch error
+        if "session not created" in str(e) and "This version of ChromeDriver only supports" in str(e):
+            print("[WebDriverFactory] Automatic detection failed due to version mismatch. Falling back to manual driver.")
+
+            # --- Manual Driver Fallback ---
+            manual_driver_path = os.path.join(os.getcwd(), "chromedriver.exe")
+            if os.path.exists(manual_driver_path):
+                print(f"[WebDriverFactory] Found manual driver at: {manual_driver_path}")
+                try:
+                    driver = uc.Chrome(driver_executable_path=manual_driver_path, options=options)
+                    print("[WebDriverFactory] Manual driver launch successful.")
+                    return driver
+                except Exception as manual_e:
+                    print(f"[WebDriverFactory] Manual driver launch also failed: {manual_e}")
+                    return None
+            else:
+                # --- User Guidance ---
+                print("\n" + "="*80)
+                print("!!! CRITICAL ERROR: AUTOMATIC BROWSER DRIVER DETECTION FAILED !!!")
+                print("="*80)
+                print("This usually means your installed Chrome/Chromium version is very new or very old.")
+                print("\n--- HOW TO FIX ---")
+                print("1. Go to: https://googlechromelabs.github.io/chrome-for-testing/")
+                print("2. Find the 'Stable' version that most closely matches your installed browser version.")
+                print("3. Download the 'chromedriver' for your platform (e.g., 'win64').")
+                print("4. Unzip the file and place 'chromedriver.exe' in the project's root folder.")
+                print(f"   (The same folder as '{os.path.basename(sys.argv[0])}')")
+                print("5. Rerun the bot.")
+                print("="*80 + "\n")
+                return None
+        else:
+            # It was a different WebDriver error, so re-raise it
+            print(f"An unexpected WebDriver error occurred: {e}")
+            return None
 
     except Exception as e:
-        print(f"Error creating undetected WebDriver for instance {instance_id}: {e}")
+        print(f"An unexpected error occurred during webdriver creation: {e}")
         return None
