@@ -113,11 +113,9 @@ ocr_cpu = st.sidebar.checkbox("OCR CPU", value=st.session_state["ocr_cpu"], key=
 st.session_state.setdefault("headless", False)
 headless = st.sidebar.checkbox("HEADLESS", value=st.session_state["headless"], key="headless")
 
-# To support the single trusted profile strategy, browser count is locked to 1.
-st.sidebar.subheader("Instance Count")
-st.sidebar.info("Bot is locked to a single instance to ensure reliability and avoid detection.")
-browser_count = 1
-st.session_state["browser_count"] = 1
+# Re-enable the browser count slider with a max of 25.
+st.session_state.setdefault("browser_count", 1)
+browser_count = st.sidebar.slider("Browser Count", min_value=1, max_value=25, value=st.session_state.get("browser_count", 1), key="browser_count")
 
 # ---------- Sidebar: Saved details list with ↪ and 🗑 ----------
 st.sidebar.subheader("Saved Booking Files")
