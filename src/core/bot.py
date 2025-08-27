@@ -11,6 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException, NoSuchElementException
+from selenium.webdriver.common.action_chains import ActionChains
 
 from src.core.webdriver_factory import create_webdriver
 from src.utils.logger import setup_logger
@@ -84,7 +85,12 @@ class IRCTCBot:
             supervisor_thread.start()
             worker_thread.start()
 
+            # --- Profile Warming ---
+            self._log_action("Warming up browser profile...")
+            self._warm_up_profile()
+
             self.driver.get("https://www.irctc.co.in/nget/train-search")
+            self._log_action("Navigated to IRCTC website.")
             self.current_state = BotState.IDLE
 
             while not self.stop_event.is_set():
@@ -140,7 +146,7 @@ class IRCTCBot:
                     self.current_state = BotState.TRAIN_LIST_PAGE
                 elif self._is_visible(By.CSS_SELECTOR, selectors.LOGOUT_BUTTON):
                     self.current_state = BotState.AT_DASHBOARD
-                elif self._is_visible(By.CSS_SELECTOR, selectors.LOGIN_BUTTON_HOME):
+                elif self._is_visible(By.XPATH, selectors.LOGIN_BUTTON_HOME):
                     # WATCHDOG LOGIC: If we see the login button, but the bot doesn't
                     # already think it's logged out, it means we got kicked out.
                     # Force the state to LOGGED_OUT to trigger a re-login.
@@ -196,6 +202,28 @@ class IRCTCBot:
             time.sleep(0.2)
         self.logger.info("Worker thread stopped.")
 
+    def _warm_up_profile(self):
+        """
+        Visits a few common sites to generate browsing history and cookies,
+        making the profile appear less 'fresh' to bot detection systems.
+        """
+        warmup_sites = [
+            "https://www.google.com",
+            "https://www.wikipedia.org",
+            "https://www.msn.com/en-in/news"
+        ]
+        random.shuffle(warmup_sites) # Visit in a random order
+
+        for site in warmup_sites[:2]: # Visit the first 2 random sites
+            try:
+                self._log_action(f"Warming up: visiting {site}")
+                self.driver.get(site)
+                time.sleep(random.uniform(1.5, 3.0))
+            except Exception as e:
+                self._log_action(f"Failed to visit warmup site {site}: {e}", is_error=True)
+        self._log_action("Profile warming complete.")
+
+
     # --- Granular State Handlers ---
     def _handle_open_login_modal(self):
         self._click_with_retries(By.XPATH, selectors.LOGIN_BUTTON_HOME)
@@ -212,13 +240,13 @@ class IRCTCBot:
         if attempt >= 5:
             self.current_state = BotState.LOGIN_FAILED
             self._log_action("Login failed after 5 attempts.", is_error=True)
-            self.driver.refresh()
+            # Do not refresh, let the watchdog handle it
             return
 
         self.current_state = BotState.LOGIN_SOLVING_CAPTCHA
         use_gpu = not self.bot_config["preferences"].get("ocr_cpu", True)
 
-        captcha_img = self._safe_find(By.CSS_SELECTOR, selectors.CAPTCHA_IMAGE_LOGIN, timeout=5)
+        captcha_img = self._wait_for_element(By.CSS_SELECTOR, selectors.CAPTCHA_IMAGE_LOGIN, timeout=5)
         if not captcha_img:
             raise Exception("Could not find captcha image element.")
 
@@ -251,11 +279,10 @@ class IRCTCBot:
         self._human_type(By.CSS_SELECTOR, selectors.JOURNEY_TO_INPUT, train_details['to_code'])
         self._click_with_retries(By.CSS_SELECTOR, selectors.AUTOCOMPLETE_OPTION)
 
-        date_input = self._safe_find(By.CSS_SELECTOR, selectors.DATE_INPUT)
+        date_input = self._wait_for_element(By.CSS_SELECTOR, selectors.DATE_INPUT)
         if not date_input: raise Exception("Date input not found")
         date_str_dmy = datetime.strptime(train_details['date'], '%d%m%Y').strftime('%d/%m/%Y')
         self.driver.execute_script(f"arguments[0].value = '{date_str_dmy}';", date_input)
-        self._click_with_retries(By.CSS_SELECTOR, "body")
 
         self.current_state = BotState.SUBMITTING_JOURNEY
         self._click_with_retries(By.CSS_SELECTOR, selectors.FIND_TRAINS_BUTTON)
@@ -264,8 +291,7 @@ class IRCTCBot:
         train_details = self.bot_config['train']
 
         self.current_state = BotState.SELECTING_QUOTA
-        quota_id = train_details['quota'].lower()
-        self._click_with_retries(By.CSS_SELECTOR, f"p-radiobutton[id='{quota_id}']")
+        self._click_with_retries(By.CSS_SELECTOR, f"p-radiobutton[id='{train_details['quota'].lower()}']")
         time.sleep(1)
 
         self.current_state = BotState.SELECTING_CLASS
@@ -279,13 +305,10 @@ class IRCTCBot:
         for train_element in train_elements:
             if train_details['train_no'] in train_element.text:
                 class_sel = selectors.CLASS_SELECTOR_TEMPLATE.format(class_code=class_code)
-                # We need to click the class selector within the context of the specific train element
-                class_button = train_element.find_element(By.CSS_SELECTOR, class_sel)
-                self.driver.execute_script("arguments[0].click();", class_button) # Use JS click for reliability here
+                self._click_with_retries(By.CSS_SELECTOR, class_sel, context=train_element)
 
                 self.current_state = BotState.CLICKING_BOOK_NOW
-                book_now_button = train_element.find_element(By.CSS_SELECTOR, selectors.BOOK_NOW_BUTTON)
-                self.driver.execute_script("arguments[0].click();", book_now_button)
+                self._click_with_retries(By.CSS_SELECTOR, selectors.BOOK_NOW_BUTTON, context=train_element)
                 return
         raise Exception(f"Train {train_details['train_no']} not found.")
 
@@ -312,7 +335,7 @@ class IRCTCBot:
         self.current_state = BotState.REVIEW_SOLVING_CAPTCHA
         use_gpu = not self.bot_config["preferences"].get("ocr_cpu", True)
 
-        captcha_img = self._safe_find(By.CSS_SELECTOR, selectors.CAPTCHA_IMAGE_REVIEW, timeout=5)
+        captcha_img = self._wait_for_element(By.CSS_SELECTOR, selectors.CAPTCHA_IMAGE_REVIEW, timeout=5)
         if not captcha_img: raise Exception("Review Captcha image not found.")
 
         captcha_src = captcha_img.get_attribute("src")
@@ -327,12 +350,12 @@ class IRCTCBot:
         self.current_state = BotState.SELECTING_PAYMENT_METHOD
         payment_method = self.bot_config['preferences']['payment']
         if payment_method == "Pay through BHIM UPI":
-            upi_radio = self._safe_find(By.XPATH, selectors.PAYMENT_METHOD_UPI_RADIO_XPATH, timeout=10)
+            upi_radio = self._wait_for_element(By.XPATH, selectors.PAYMENT_METHOD_UPI_RADIO_XPATH, timeout=10)
             if not upi_radio: raise Exception("UPI Payment option not found")
             self.driver.execute_script("arguments[0].click();", upi_radio)
 
             self.current_state = BotState.INITIATING_PAYMENT
-            pay_button = self._safe_find(By.CSS_SELECTOR, selectors.PAY_AND_BOOK_BUTTON, timeout=10)
+            pay_button = self._wait_for_element(By.CSS_SELECTOR, selectors.PAY_AND_BOOK_BUTTON, timeout=10)
             if not pay_button: raise Exception("Pay and Book button not found")
             self.driver.execute_script("arguments[0].click();", pay_button)
 
@@ -371,61 +394,56 @@ class IRCTCBot:
         except Exception as e:
             self.logger.warning(f"Could not write status file: {e}")
 
-    def _safe_find(self, by, value, timeout=1):
-        """Safely find an element without throwing an exception."""
+    def _wait_for_element(self, by, value, timeout=10, condition=EC.presence_of_element_located):
+        """A more generic wait method."""
+        self._log_action(f"Waiting for element ({condition.__name__}): {value}")
         try:
-            return WebDriverWait(self.driver, timeout).until(EC.presence_of_element_located((by, value)))
-        except Exception:
+            element = WebDriverWait(self.driver, timeout).until(condition((by, value)))
+            self._log_action(f"Found element: {value}")
+            return element
+        except TimeoutException:
+            self._log_action(f"TIMEOUT waiting for element: {value}", is_error=True)
             return None
 
-    def _click_with_retries(self, by, value, timeout=300):
+    def _click_with_retries(self, by, value, timeout=300, context=None):
         """
-        A robust clicking function inspired by the user's previous code.
-        It is patient, persistent, and has multiple fallback mechanisms.
+        A robust clicking function that uses ActionChains for human-like interaction.
         """
         self._log_action(f"Attempting to click: {value}")
-        end_time = time.time() + timeout
 
-        while time.time() < end_time and not self.stop_event.is_set():
-            element = None
+        # Use the main driver or a sub-context if provided
+        search_context = context or self.driver
+
+        try:
+            # 1. Wait for the element to be present on the page
+            wait = WebDriverWait(self.driver, timeout)
+            element = wait.until(lambda d: search_context.find_element(by, value))
+
+            # 2. Move the mouse to the element
+            ActionChains(self.driver).move_to_element(element).perform()
+            self._log_action(f"Moved mouse to: {value}")
+            time.sleep(0.1)
+
+            # 3. Wait for the element to be clickable
+            clickable_element = wait.until(EC.element_to_be_clickable((by, value)))
+
+            # 4. Perform the click
+            clickable_element.click()
+            self._log_action(f"Successfully clicked: {value}")
+            return True
+
+        except Exception as e:
+            self._log_action(f"Click failed for {value}. Error: {e}", is_error=True)
+            # Fallback to JS click if all else fails
             try:
-                element = self._safe_find(by, value, timeout=1)
-                if not element:
-                    time.sleep(1)
-                    continue
-
-                # Scroll into view - a human-like action
-                self.driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'center'});", element)
-                time.sleep(0.2)
-
-                # Attempt 1: Standard click
-                try:
-                    element.click()
-                    self._log_action(f"Successfully clicked: {value}")
-                    return True
-                except Exception: # Catches ElementClickInterceptedException etc.
-                    self._log_action(f"Standard click failed, trying JS click for: {value}")
-
-                # Attempt 2: JavaScript click
-                try:
-                    self.driver.execute_script("arguments[0].click();", element)
-                    self._log_action(f"Successfully clicked via JS: {value}")
-                    return True
-                except Exception as e:
-                    self._log_action(f"JS click also failed for: {value}. Error: {e}", is_error=True)
-
-                time.sleep(1) # Wait before the next big retry
-
-            except StaleElementReferenceException:
-                self._log_action(f"Element went stale: {value}. Retrying find...")
-                time.sleep(0.5)
-                continue
-            except Exception as e:
-                self._log_action(f"An unexpected error occurred during click retry: {e}", is_error=True)
-                time.sleep(1)
-
-        self._log_action(f"FATAL: Failed to click element {value} after {timeout} seconds.", is_error=True)
-        return False
+                self._log_action("Attempting JS click fallback...")
+                element = self.driver.find_element(by, value)
+                self.driver.execute_script("arguments[0].click();", element)
+                self._log_action(f"Successfully clicked via JS: {value}")
+                return True
+            except Exception as js_e:
+                self._log_action(f"JS click also failed for {value}. Error: {js_e}", is_error=True)
+                return False
 
     def _is_visible(self, by, value, timeout=0.1):
         try:
@@ -436,15 +454,18 @@ class IRCTCBot:
 
     def _human_type(self, by, value, text: str):
         self._log_action(f"Typing '{text[:15]}...' into {value}")
-        element = self._safe_find(by, value, timeout=10)
+        element = self._wait_for_element(by, value, timeout=10)
         if not element:
             raise TimeoutException(f"Could not find element {value} to type into after 10 seconds.")
+
+        # Move mouse to the element before typing
+        ActionChains(self.driver).move_to_element(element).pause(0.1).click().perform()
 
         element.clear()
         for char in text:
             element.send_keys(char)
-            # Delay is optimized for speed while retaining a human-like variance
-            time.sleep(random.uniform(0.03, 0.08))
+            # This is the fastest safe speed. Any faster risks detection.
+            time.sleep(random.uniform(0.01, 0.05))
         self._log_action(f"Finished typing.")
 
     def _close_popups(self):
@@ -452,20 +473,8 @@ class IRCTCBot:
         Finds and closes known popups. Called by the supervisor.
         This has been made less aggressive to avoid clicking incorrect elements.
         """
-        # More specific popups should be prioritized. Generic ones are risky.
         popups = [
-            # This is a known, specific popup for Aadhar users. It's safe to click.
             (By.CSS_SELECTOR, "button.btn-primary[aria-label*='Aadhaar authenticated users']"),
-
-            # The following popups are temporarily disabled as per user feedback to prevent
-            # the bot from clicking the "AskDISHA" button by mistake.
-
-            # (By.CSS_SELECTOR, "img#disha-banner-close"), # Disabled: Disha banner
-
-            # The generic buttons below are too risky as they can match unintended elements.
-            # (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'accept')]"),
-            # (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'ok')]"),
-            # (By.XPATH, "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'got it')]"),
         ]
         for by, selector in popups:
             try:
@@ -474,10 +483,8 @@ class IRCTCBot:
                     if element.is_displayed() and element.is_enabled():
                         self._log_action(f"Closing popup: {selector}")
                         element.click()
-                        time.sleep(0.5) # Pause after a click to let UI settle
+                        time.sleep(0.5)
             except StaleElementReferenceException:
-                # This is expected if the popup closes itself after we find it
                 continue
             except Exception:
-                # Ignore other potential errors during popup closing
                 continue
