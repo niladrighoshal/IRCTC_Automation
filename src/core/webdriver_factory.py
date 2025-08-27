@@ -84,30 +84,8 @@ def create_webdriver(instance_id, is_headless=False, use_gpu=True):
             print("[WebDriverFactory] Using default browser executable path.")
             driver = uc.Chrome(options=options)
 
-        # --- Post-launch popup handling ---
-        # After launch, Brave may show a "private analytics" popup. We need to dismiss it.
-        print("[WebDriverFactory] Checking for initial Brave popups...")
-        from selenium.webdriver.common.by import By
-        import time
-
-        end_time = time.time() + 10 # Check for 10 seconds
-        popup_found_and_clicked = False
-        while time.time() < end_time and not popup_found_and_clicked:
-            try:
-                # This selector is specific to the "Got it" button on the analytics popup
-                got_it_button = driver.find_element(By.XPATH, "//button[normalize-space()='Got it']")
-                if got_it_button.is_displayed() and got_it_button.is_enabled():
-                    print("[WebDriverFactory] Found 'Got it' popup. Clicking to dismiss...")
-                    got_it_button.click()
-                    popup_found_and_clicked = True
-                    print("[WebDriverFactory] 'Got it' popup dismissed.")
-            except Exception:
-                # Button not found, which is the normal case after the first run.
-                time.sleep(0.5)
-
-        if not popup_found_and_clicked:
-            print("[WebDriverFactory] No initial popups found, or could not dismiss in time.")
-
+        # The driver is returned immediately. Any post-launch handling, like popups
+        # or profile warming, is now the responsibility of the calling logic (e.g., IRCTCBot).
         return driver
 
     except Exception as e:
