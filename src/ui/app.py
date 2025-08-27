@@ -68,7 +68,12 @@ if "_loaded_data" in st.session_state:
     st.session_state["from_station_display"] = train.get("from_input", "")
     st.session_state["to_station_display"] = train.get("to_input", "")
     try:
-        st.session_state["travel_date"] = datetime.strptime(train.get("date",""), "%d%m%Y").date()
+        loaded_date = datetime.strptime(train.get("date",""), "%d%m%Y").date()
+        if loaded_date < date.today():
+            st.warning(f"Saved date {loaded_date.strftime('%d-%b-%Y')} is in the past. Defaulting to tomorrow.")
+            st.session_state["travel_date"] = date.today() + timedelta(days=1)
+        else:
+            st.session_state["travel_date"] = loaded_date
     except Exception:
         st.session_state["travel_date"] = date.today() + timedelta(days=1)
     st.session_state["train_no_input"] = train.get("train_no", "")
@@ -114,7 +119,8 @@ browser_count = st.sidebar.slider("Browser Count", min_value=1, max_value=(8 if 
 
 # ---------- Sidebar: Saved details list with ↪ and 🗑 ----------
 st.sidebar.subheader("Saved Booking Files")
-saved_files = sorted([f for f in os.listdir(SAVE_DIR) if f.endswith(".json")], reverse=True)
+# Filter out the 'config.json' file from the list of saved files to prevent clutter
+saved_files = sorted([f for f in os.listdir(SAVE_DIR) if f.endswith(".json") and f != "config.json"], reverse=True)
 with st.sidebar:
     st.markdown('<div class="sidebar-scroll">', unsafe_allow_html=True)
     for sf in saved_files:
@@ -508,15 +514,13 @@ if st.sidebar.button("Start BOT", use_container_width=True):
             },
             "saved_at": datetime.now().isoformat(timespec="seconds")
         }
-        # Always save to a consistent filename for the bot to pick up, overwriting the latest.
-        # The `run_bot.py` script is designed to find the latest file, but saving to a consistent
-        # name like 'latest_run.json' can also be a robust strategy. We'll stick to the
-        # "latest by timestamp" strategy for now.
-        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_booking.json"
+        # Always save to a consistent 'config.json' for the bot to pick up.
+        # This file is ignored by the saved files list to avoid clutter.
+        filename = "config.json"
         out_path = os.path.join(SAVE_DIR, filename)
         with open(out_path, "w", encoding="utf-8") as fh:
             json.dump(booking_data, fh, indent=2, ensure_ascii=False)
-        st.sidebar.info(f"Saved current settings to {filename}")
+        st.sidebar.info("Saved current settings to config.json")
 
         # --- Launch the bot script as a background process ---
         try:

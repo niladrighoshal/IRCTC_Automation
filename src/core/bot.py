@@ -20,6 +20,30 @@ from src.core.ocr_solver import solve_captcha
 from src.core.state import BotState
 import src.core.selectors as selectors
 
+WARMUP_SITES = {
+    "Neocities": "https://neocities.org", "Dillo Showcase": "https://dillo-browser.github.io", "W3C": "https://www.w3.org",
+    "Example": "https://www.example.com", "IANA Reserved Domains": "https://www.iana.org/domains/reserved", "TextFiles": "https://www.textfiles.com",
+    "Simple HTML Guide": "https://www.simplehtmlguide.com", "Lipsum": "https://www.lipsum.com", "HTML.com": "https://www.html.com",
+    "Freesound": "https://www.freesound.org", "512KB Club": "https://512kb.club", "1MB Club": "https://1mb.club",
+    "250KB Club": "https://250kb.club", "Motherfucking Website": "https://motherfuckingwebsite.com", "No-JS Club": "https://no-js.club",
+    "Podd App": "https://podd.app", "Danluu": "https://danluu.com", "Piuvas": "https://piuvas.net", "Rojen": "https://rojen.uk",
+    "Phreedom": "https://phreedom.club", "I Need More Coffee": "https://ineedmore.coffee", "0xff": "https://0xff.nu",
+    "Avid Seeker": "https://avidseeker.github.io", "Osiux": "https://osiux.com", "Rectangles": "https://rectangles.app",
+    "Daniel Cuttridge": "https://danielcuttridge.com", "Jackie Chalarca": "https://jackiechalarca.org", "Hybras": "https://hybras.dev",
+    "Arkensys": "https://arkensys.dedyn.io", "Demidfr": "https://demidfr.com", "HTTP Guides": "https://httpguides.com",
+    "Pantsu Fan": "https://pantsufan.github.io", "Tunes Heavy": "https://tunesheavy.com", "Saladhax": "https://saladhax.site",
+    "Portable": "https://portable.fyi", "Tairesh": "https://tairesh.dev", "Sno.ws": "https://sno.ws", "How WTF": "https://how.wtf",
+    "Jason Thai": "https://jasonthai.me", "B0ba": "https://b0ba.dev", "Logan Connolly": "https://loganconnolly.com",
+    "Seirdy": "https://seirdy.one", "Chez Ice Man": "https://cheziceman.fr", "Imsky": "https://imsky.co",
+    "Mathieu De Ruiter": "https://mathieuderuiter.nl", "Level News": "https://levelnews.org", "GTMetrix": "https://gtmetrix.com",
+    "Cliffle": "https://cliffle.com", "JS Bin": "https://jsbin.com", "JSFiddle": "https://jsfiddle.net", "CodePen": "https://codepen.io",
+    "CSS Desk": "https://cssdesk.com", "Liveweave": "https://liveweave.com", "Plunker": "https://plnkr.co",
+    "PHP Fiddle": "https://phpfiddle.org", "W3Schools": "https://www.w3schools.com", "WebFiddle": "https://webfiddle.io",
+    "JSFeed": "https://jsfeed.com", "LiveGap Editor": "https://livegap.com/editor", "ScratchPad": "https://scratchpad.io",
+    "Runnable": "https://runnable.com", "jsdo.it": "https://jsdo.it", "snip2code": "https://snip2code.com"
+}
+
+
 class IRCTCBot:
     """
     An intelligent, state-driven bot for booking tickets on IRCTC.
@@ -204,25 +228,64 @@ class IRCTCBot:
 
     def _warm_up_profile(self):
         """
-        Visits a few common sites to generate browsing history and cookies,
-        making the profile appear less 'fresh' to bot detection systems.
+        Visits multiple sites in multiple tabs to generate a realistic
+        browsing history and cookie profile, making the bot appear more human.
         """
-        warmup_sites = [
-            "https://www.google.com",
-            "https://www.wikipedia.org",
-            "https://www.msn.com/en-in/news"
-        ]
-        random.shuffle(warmup_sites) # Visit in a random order
+        self._log_action("Starting advanced profile warming routine.")
+        original_window = self.driver.current_window_handle
 
-        for site in warmup_sites[:2]: # Visit the first 2 random sites
+        num_tabs = random.randint(5, 8)
+        sites_to_visit = random.sample(list(WARMUP_SITES.values()), num_tabs)
+
+        # Open new tabs
+        for i in range(num_tabs - 1):
+            self.driver.execute_script("window.open('');")
+            time.sleep(0.2)
+
+        all_windows = self.driver.window_handles
+
+        # Visit sites in tabs
+        for i, window_handle in enumerate(all_windows):
             try:
-                self._log_action(f"Warming up: visiting {site}")
+                self.driver.switch_to.window(window_handle)
+                site = sites_to_visit[i]
+                self._log_action(f"Warming Tab {i+1}: Navigating to {site}")
                 self.driver.get(site)
-                time.sleep(random.uniform(1.5, 3.0))
+                # Wait for page to likely be loaded
+                time.sleep(random.uniform(3, 5))
+                # Simulate scrolling
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 4);")
+                time.sleep(random.uniform(0.5, 1.5))
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 2);")
+                time.sleep(random.uniform(0.5, 1.5))
+                self._log_action(f"Warming Tab {i+1}: Scrolled on {site}")
             except Exception as e:
-                self._log_action(f"Failed to visit warmup site {site}: {e}", is_error=True)
-        self._log_action("Profile warming complete.")
+                self._log_action(f"Error warming tab {i+1}: {e}", is_error=True)
 
+        # Close all but one of the warm-up tabs
+        self._log_action("Closing extra warm-up tabs.")
+        for window_handle in all_windows[1:]:
+            self.driver.switch_to.window(window_handle)
+            self.driver.close()
+            time.sleep(0.2)
+
+        # Switch back to the one remaining warm-up tab
+        self.driver.switch_to.window(all_windows[0])
+        self._log_action("Warm-up tabs closed.")
+
+        # Open IRCTC in a new tab
+        self._log_action("Opening IRCTC in a new tab.")
+        self.driver.execute_script("window.open('');")
+        self.driver.switch_to.window(self.driver.window_handles[-1])
+
+        # Close the last warm-up tab
+        time.sleep(0.5)
+        self.driver.switch_to.window(all_windows[0])
+        self.driver.close()
+
+        # Switch to the IRCTC tab
+        self.driver.switch_to.window(self.driver.window_handles[0])
+        self._log_action("Profile warming complete. IRCTC is now the active tab.")
 
     # --- Granular State Handlers ---
     def _handle_open_login_modal(self):
