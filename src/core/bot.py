@@ -103,15 +103,15 @@ class IRCTCBot:
                 self._log_action("FATAL: WebDriver creation failed", is_error=True)
                 return
 
+            # --- Profile Warming ---
+            self._log_action("Warming up browser profile...")
+            self._warm_up_profile()
+
             supervisor_thread = threading.Thread(target=self._supervisor_loop, daemon=True)
             worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
 
             supervisor_thread.start()
             worker_thread.start()
-
-            # --- Profile Warming ---
-            self._log_action("Warming up browser profile...")
-            self._warm_up_profile()
 
             self.driver.get("https://www.irctc.co.in/nget/train-search")
             self._log_action("Navigated to IRCTC website.")
@@ -230,62 +230,58 @@ class IRCTCBot:
         """
         Visits multiple sites in multiple tabs to generate a realistic
         browsing history and cookie profile, making the bot appear more human.
+        This function is built to be "crash-proof".
         """
         self._log_action("Starting advanced profile warming routine.")
-        original_window = self.driver.current_window_handle
 
-        num_tabs = random.randint(5, 8)
-        sites_to_visit = random.sample(list(WARMUP_SITES.values()), num_tabs)
+        try:
+            original_window = self.driver.current_window_handle
+            sites_to_visit = random.sample(list(WARMUP_SITES.values()), random.randint(5, 8))
 
-        # Open new tabs
-        for i in range(num_tabs - 1):
-            self.driver.execute_script("window.open('');")
-            time.sleep(0.2)
+            # Open new tabs
+            for i in range(len(sites_to_visit) - 1):
+                try:
+                    self.driver.execute_script("window.open('');")
+                    time.sleep(0.2)
+                except Exception as e:
+                    self._log_action(f"Warm-up: Could not open new tab {i+1}. Error: {e}", is_error=True)
 
-        all_windows = self.driver.window_handles
+            all_windows = self.driver.window_handles
 
-        # Visit sites in tabs
-        for i, window_handle in enumerate(all_windows):
-            try:
-                self.driver.switch_to.window(window_handle)
-                site = sites_to_visit[i]
-                self._log_action(f"Warming Tab {i+1}: Navigating to {site}")
-                self.driver.get(site)
-                # Wait for page to likely be loaded
-                time.sleep(random.uniform(3, 5))
-                # Simulate scrolling
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 4);")
-                time.sleep(random.uniform(0.5, 1.5))
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 2);")
-                time.sleep(random.uniform(0.5, 1.5))
-                self._log_action(f"Warming Tab {i+1}: Scrolled on {site}")
-            except Exception as e:
-                self._log_action(f"Error warming tab {i+1}: {e}", is_error=True)
+            # Visit sites in tabs
+            for i, window_handle in enumerate(all_windows):
+                if i >= len(sites_to_visit): break # In case tab opening failed
+                try:
+                    self.driver.switch_to.window(window_handle)
+                    site = sites_to_visit[i]
+                    self._log_action(f"Warming Tab {i+1}: Navigating to {site}")
+                    self.driver.get(site)
+                    time.sleep(random.uniform(2, 4)) # Wait for page to start loading
+                    self._close_popups() # Close any cookie banners etc.
+                    # Simulate scrolling
+                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 4);")
+                    time.sleep(random.uniform(0.5, 1.5))
+                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 2);")
+                except Exception as e:
+                    self._log_action(f"Error warming tab {i+1} with site {site}: {e}", is_error=True)
 
-        # Close all but one of the warm-up tabs
-        self._log_action("Closing extra warm-up tabs.")
-        for window_handle in all_windows[1:]:
-            self.driver.switch_to.window(window_handle)
-            self.driver.close()
-            time.sleep(0.2)
+            # Close extra tabs
+            self._log_action("Closing extra warm-up tabs.")
+            for window_handle in self.driver.window_handles:
+                if window_handle != original_window:
+                    try:
+                        self.driver.switch_to.window(window_handle)
+                        self.driver.close()
+                    except Exception:
+                        pass # Ignore errors if tab is already closed
 
-        # Switch back to the one remaining warm-up tab
-        self.driver.switch_to.window(all_windows[0])
-        self._log_action("Warm-up tabs closed.")
+            self.driver.switch_to.window(original_window)
+            self._log_action("Profile warming complete.")
 
-        # Open IRCTC in a new tab
-        self._log_action("Opening IRCTC in a new tab.")
-        self.driver.execute_script("window.open('');")
-        self.driver.switch_to.window(self.driver.window_handles[-1])
+        except Exception as e:
+            self._log_action(f"A critical error occurred during profile warming: {e}", is_error=True)
+            self._log_action("Continuing with booking attempt despite warming failure.", is_error=True)
 
-        # Close the last warm-up tab
-        time.sleep(0.5)
-        self.driver.switch_to.window(all_windows[0])
-        self.driver.close()
-
-        # Switch to the IRCTC tab
-        self.driver.switch_to.window(self.driver.window_handles[0])
-        self._log_action("Profile warming complete. IRCTC is now the active tab.")
 
     # --- Granular State Handlers ---
     def _handle_open_login_modal(self):
